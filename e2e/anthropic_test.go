@@ -15,7 +15,7 @@ import (
 func TestE2E_Anthropic_BasicStream(t *testing.T) {
 	cli, model := newAnthropicClient(t)
 	stream, err := cli.CreateMessageStream(context.Background(),
-		helpers.BasicTextPrompt(model, 256))
+		helpers.BasicTextPrompt(model, 1024))
 	if err != nil {
 		t.Fatalf("CreateMessageStream: %v", err)
 	}

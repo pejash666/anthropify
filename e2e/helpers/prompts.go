@@ -25,11 +25,13 @@ func BasicTextPrompt(model string, maxTokens int64) anthropic.MessageNewParams {
 }
 
 // MaxTokensClipPrompt forces stop_reason=max_tokens by setting
-// max_tokens very low against an open-ended prompt.
+// max_tokens very low against an open-ended prompt. Note: some
+// providers (e.g. OpenAI Responses) reject max_output_tokens < 16, so
+// we use the smallest value that is accepted everywhere.
 func MaxTokensClipPrompt(model string) anthropic.MessageNewParams {
 	src := `{
 		"model": "` + model + `",
-		"max_tokens": 10,
+		"max_tokens": 16,
 		"messages": [
 			{"role":"user","content":[{"type":"text","text":"Write a 500-word essay about the history of the Roman Empire."}]}
 		]

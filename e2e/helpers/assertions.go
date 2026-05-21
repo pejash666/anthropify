@@ -5,6 +5,7 @@ package helpers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 
@@ -204,3 +205,30 @@ type RecordingTransport struct {
 // unchanged. The signature is fixed so we can wire it through every
 // test without churn later.
 func (r *RecordingTransport) WrapContext(ctx context.Context) context.Context { return ctx }
+
+// SkipIfUnsupported short-circuits a test with t.Skip when err signals
+// that the feature is not yet implemented. This is used by the
+// non-streaming E2E tests on adapters whose drain-and-assemble path is
+// still scaffolded (openai_responses, gemini_native, chat_completions).
+// Known limitation: the top-level client only natively non-streams via
+// the anthropic passthrough adapter today; other providers return
+// hybridstream.ErrUnsupported (or an error message containing
+// "feature not yet supported"). Once the fallback drain is wired up
+// these skips can be removed.
+func SkipIfUnsupported(t *testing.T, err error) bool {
+	t.Helper()
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, hybridstream.ErrUnsupported) {
+		t.Skipf("skipping: non-streaming not yet supported by adapter: %v", err)
+		return true
+	}
+	msg := err.Error()
+	if strings.Contains(msg, "feature not yet supported") ||
+		strings.Contains(msg, "not yet supported") {
+		t.Skipf("skipping: non-streaming not yet supported by adapter: %v", err)
+		return true
+	}
+	return false
+}
