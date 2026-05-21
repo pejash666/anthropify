@@ -94,7 +94,7 @@ All request/response types are re-exported from
 | `anthropic`        | Complete (passthrough).   |
 | `openai_responses` | Streaming complete; non-streaming path drains the stream. |
 | `gemini_native`    | Streaming complete; non-streaming path drains the stream. |
-| `chat_completions` | Scaffold only - interface + constructor; `Stream` returns `ErrNotImplemented`. |
+| `chat_completions` | Streaming complete; serves Kimi / DeepSeek / Qwen / GLM and any OpenAI Chat Completions compatible upstream. |
 
 See `adapter/<provider>/adapter.go` for TODOs.
 
