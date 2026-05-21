@@ -386,3 +386,156 @@ func jsonNumber(f float64) string {
 	b, _ := json.Marshal(f)
 	return string(b)
 }
+
+// TestBuildRequest_DeepSeekV32CanonicalPassthrough verifies that the
+// SoT canonical name (slash form) goes through the DeepSeek passthrough
+// branch: the raw thinking block must be echoed verbatim and
+// reasoning_effort must NOT be set. See library/constants/llm.go:196.
+func TestBuildRequest_DeepSeekV32CanonicalPassthrough(t *testing.T) {
+	raw := []byte(`{
+		"model": "deepseek/deepseek-v3.2",
+		"messages": [{"role": "user", "content": [{"type": "text", "text": "x"}]}],
+		"thinking": {"type": "enabled", "budget_tokens": 8000}
+	}`)
+	body, err := buildRequestFromRaw(raw, false)
+	if err != nil {
+		t.Fatalf("BuildRequest error: %v", err)
+	}
+	var got map[string]any
+	_ = json.Unmarshal(body, &got)
+	th, ok := got["thinking"].(map[string]any)
+	if !ok {
+		t.Fatalf("thinking block missing; got=%v", got)
+	}
+	if th["type"] != "enabled" {
+		t.Fatalf("thinking.type = %v, want enabled (passthrough)", th["type"])
+	}
+	if _, ok := got["reasoning_effort"]; ok {
+		t.Fatalf("reasoning_effort must not be set for DeepSeek V3.2 canonical name")
+	}
+}
+
+// TestBuildRequest_DeepSeekV32AliasPassthrough verifies that the
+// hybridstream-extended aliases ("deepseek-v3.2" and "deepseek-v3-2")
+// also trigger the passthrough branch. This keeps the legacy callers
+// working alongside the SoT canonical name.
+func TestBuildRequest_DeepSeekV32AliasPassthrough(t *testing.T) {
+	for _, model := range []string{"deepseek-v3.2", "deepseek-v3-2"} {
+		raw := []byte(`{
+			"model": "` + model + `",
+			"messages": [{"role": "user", "content": [{"type": "text", "text": "x"}]}],
+			"thinking": {"type": "enabled", "budget_tokens": 8000}
+		}`)
+		body, err := buildRequestFromRaw(raw, false)
+		if err != nil {
+			t.Fatalf("[%s] BuildRequest error: %v", model, err)
+		}
+		var got map[string]any
+		_ = json.Unmarshal(body, &got)
+		th, ok := got["thinking"].(map[string]any)
+		if !ok {
+			t.Fatalf("[%s] thinking block missing", model)
+		}
+		if th["type"] != "enabled" {
+			t.Fatalf("[%s] thinking.type = %v, want enabled (passthrough)", model, th["type"])
+		}
+		if _, ok := got["reasoning_effort"]; ok {
+			t.Fatalf("[%s] reasoning_effort must not be set", model)
+		}
+	}
+}
+
+// TestBuildRequest_KimiK25Canonical verifies that the SoT canonical
+// kimi-k2.5 name (dot form, see library/constants/llm.go:179) is
+// recognised by isKimiK2Family: temperature must be stripped, and a
+// historical assistant tool_call without reasoning_content must force
+// thinking=disabled.
+func TestBuildRequest_KimiK25Canonical(t *testing.T) {
+	raw := []byte(`{
+		"model": "kimi-k2.5",
+		"temperature": 0.5,
+		"messages": [
+			{"role": "user", "content": [{"type": "text", "text": "search"}]},
+			{"role": "assistant", "content": [
+				{"type": "tool_use", "id": "tu_1", "name": "search", "input": {"q": "foo"}}
+			]},
+			{"role": "user", "content": [
+				{"type": "tool_result", "tool_use_id": "tu_1", "content": [{"type": "text", "text": "ok"}]}
+			]}
+		]
+	}`)
+	body, err := buildRequestFromRaw(raw, false)
+	if err != nil {
+		t.Fatalf("BuildRequest error: %v", err)
+	}
+	var got map[string]any
+	_ = json.Unmarshal(body, &got)
+	th, ok := got["thinking"].(map[string]any)
+	if !ok {
+		t.Fatalf("thinking block missing for kimi-k2.5 canonical")
+	}
+	if th["type"] != "disabled" {
+		t.Fatalf("thinking.type = %v, want disabled (kimi-k2 family with prior tool_call)", th["type"])
+	}
+	if _, ok := got["temperature"]; ok {
+		t.Fatalf("temperature must not be present for kimi-k2 family canonical name")
+	}
+}
+
+// TestBuildRequest_ToolResultMultipleRounds verifies that a multi-turn
+// conversation with several rounds of tool_use/tool_result blocks is
+// flattened correctly: every tool_result inside a user message becomes
+// its own role="tool" message preserving tool_call_id ordering.
+func TestBuildRequest_ToolResultMultipleRounds(t *testing.T) {
+	raw := []byte(`{
+		"model": "deepseek-chat",
+		"messages": [
+			{"role": "user", "content": [{"type": "text", "text": "do work"}]},
+			{"role": "assistant", "content": [
+				{"type": "tool_use", "id": "tu_a", "name": "ls", "input": {"p": "/"}},
+				{"type": "tool_use", "id": "tu_b", "name": "cat", "input": {"f": "x"}}
+			]},
+			{"role": "user", "content": [
+				{"type": "tool_result", "tool_use_id": "tu_a", "content": [{"type": "text", "text": "file1\nfile2"}]},
+				{"type": "tool_result", "tool_use_id": "tu_b", "content": [{"type": "text", "text": "hello"}]},
+				{"type": "text", "text": "any other notes?"}
+			]}
+		]
+	}`)
+	body, err := buildRequestFromRaw(raw, false)
+	if err != nil {
+		t.Fatalf("BuildRequest error: %v", err)
+	}
+	var got map[string]any
+	_ = json.Unmarshal(body, &got)
+	messages, _ := got["messages"].([]any)
+
+	// Expected ordering: user, assistant(tool_calls=2), tool(tu_a), tool(tu_b), user(text).
+	if len(messages) != 5 {
+		t.Fatalf("messages length = %d, want 5; got=%v", len(messages), messages)
+	}
+	first := messages[0].(map[string]any)
+	if first["role"] != "user" || first["content"] != "do work" {
+		t.Fatalf("messages[0] = %v", first)
+	}
+	asst := messages[1].(map[string]any)
+	if asst["role"] != "assistant" {
+		t.Fatalf("messages[1].role = %v", asst["role"])
+	}
+	tcs, _ := asst["tool_calls"].([]any)
+	if len(tcs) != 2 {
+		t.Fatalf("assistant tool_calls length = %d", len(tcs))
+	}
+	tool0 := messages[2].(map[string]any)
+	if tool0["role"] != "tool" || tool0["tool_call_id"] != "tu_a" {
+		t.Fatalf("messages[2] = %v, want tool/tu_a", tool0)
+	}
+	tool1 := messages[3].(map[string]any)
+	if tool1["role"] != "tool" || tool1["tool_call_id"] != "tu_b" {
+		t.Fatalf("messages[3] = %v, want tool/tu_b", tool1)
+	}
+	last := messages[4].(map[string]any)
+	if last["role"] != "user" || last["content"] != "any other notes?" {
+		t.Fatalf("messages[4] = %v", last)
+	}
+}

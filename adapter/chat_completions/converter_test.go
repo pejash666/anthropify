@@ -448,3 +448,217 @@ func TestConverter_GeminiViaChatCompletionsThinking(t *testing.T) {
 		t.Fatalf("expected a second (text) content_block_start")
 	}
 }
+
+// TestConverter_TextThenToolThenTextThenTool covers the
+// `text -> tool_call_0 -> text -> tool_call_1` interleaved sequence.
+// The converter must correctly close each open block before opening the
+// next so indices stay monotonic (text:0, tool_0:1, text:2, tool_1:3).
+func TestConverter_TextThenToolThenTextThenTool(t *testing.T) {
+	input := `
+{"choices":[{"delta":{"content":"intro "}}]}
+{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","function":{"name":"fn_a","arguments":"{\"x\":1}"}}]}}]}
+{"choices":[{"delta":{"content":"between"}}]}
+{"choices":[{"delta":{"tool_calls":[{"index":1,"id":"call_2","function":{"name":"fn_b","arguments":"{\"y\":2}"}}]}}]}
+{"choices":[{"delta":{"content":" trailing"}}]}
+{"choices":[{"finish_reason":"stop","delta":{}}]}
+`
+	events := runConverter(t, input)
+
+	// Collect content_block_start events in order, with their indexes.
+	type startInfo struct {
+		blockType string
+		index     float64
+		name      string
+	}
+	var starts []startInfo
+	for _, e := range events {
+		if e["type"] != "content_block_start" {
+			continue
+		}
+		b := e["content_block"].(map[string]any)
+		bt, _ := b["type"].(string)
+		nm, _ := b["name"].(string)
+		idx, _ := e["index"].(float64)
+		starts = append(starts, startInfo{blockType: bt, index: idx, name: nm})
+	}
+	// Expect 5 blocks: text(intro), tool_use(fn_a), text(between),
+	// tool_use(fn_b), text(trailing). Each interleaved text/tool
+	// transition closes the previous block and opens a fresh one.
+	if len(starts) != 5 {
+		t.Fatalf("expected 5 content_block_start events, got %d (%+v)", len(starts), starts)
+	}
+	want := []string{"text", "tool_use", "text", "tool_use", "text"}
+	for i, w := range want {
+		if starts[i].blockType != w {
+			t.Fatalf("block[%d].type = %q, want %q (full=%+v)", i, starts[i].blockType, w, starts)
+		}
+	}
+	// Indexes must be strictly increasing 0..4.
+	for i, s := range starts {
+		if int(s.index) != i {
+			t.Fatalf("block[%d].index = %v, want %d", i, s.index, i)
+		}
+	}
+	if starts[1].name != "fn_a" || starts[3].name != "fn_b" {
+		t.Fatalf("tool names: %s / %s", starts[1].name, starts[3].name)
+	}
+
+	// Reassemble each text block in order.
+	var textAccum string
+	var sawText bool
+	currentIsText := false
+	for _, e := range events {
+		switch e["type"] {
+		case "content_block_start":
+			b := e["content_block"].(map[string]any)
+			currentIsText = b["type"] == "text"
+		case "content_block_delta":
+			if currentIsText {
+				d := e["delta"].(map[string]any)
+				if d["type"] == "text_delta" {
+					textAccum += d["text"].(string)
+					sawText = true
+				}
+			}
+		}
+	}
+	if !sawText {
+		t.Fatalf("no text deltas captured")
+	}
+	if textAccum != "intro between trailing" {
+		t.Fatalf("text accum = %q, want %q", textAccum, "intro between trailing")
+	}
+
+	// stop_reason should be end_turn (trailing text after tools).
+	for _, e := range events {
+		if e["type"] == "message_delta" {
+			d := e["delta"].(map[string]any)
+			if d["stop_reason"] != "end_turn" {
+				t.Fatalf("stop_reason = %v, want end_turn", d["stop_reason"])
+			}
+		}
+	}
+}
+
+// TestConverter_ReasoningThenToolUse: reasoning_content delta is
+// followed directly by a tool_call (no intervening text). The thinking
+// block must close before the tool_use block opens.
+func TestConverter_ReasoningThenToolUse(t *testing.T) {
+	input := `
+{"choices":[{"delta":{"reasoning_content":"planning..."}}]}
+{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_xy","function":{"name":"do_it","arguments":"{}"}}]}}]}
+{"choices":[{"finish_reason":"tool_calls","delta":{}}]}
+`
+	events := runConverter(t, input)
+
+	// Sequence check: message_start, thinking_start, thinking_delta,
+	// thinking_stop, tool_use_start, tool_use_delta?, tool_use_stop,
+	// message_delta, message_stop.
+	got := eventTypes(events)
+	// First block must be thinking, second must be tool_use.
+	var starts []string
+	for _, e := range events {
+		if e["type"] == "content_block_start" {
+			b := e["content_block"].(map[string]any)
+			starts = append(starts, b["type"].(string))
+		}
+	}
+	if len(starts) < 2 {
+		t.Fatalf("expected at least 2 content_block_start events, got %d; types=%v", len(starts), got)
+	}
+	if starts[0] != "thinking" {
+		t.Fatalf("starts[0] = %s, want thinking", starts[0])
+	}
+	if starts[1] != "tool_use" {
+		t.Fatalf("starts[1] = %s, want tool_use", starts[1])
+	}
+	// stop_reason should be tool_use (no trailing text after tool).
+	for _, e := range events {
+		if e["type"] == "message_delta" {
+			d := e["delta"].(map[string]any)
+			if d["stop_reason"] != "tool_use" {
+				t.Fatalf("stop_reason = %v, want tool_use", d["stop_reason"])
+			}
+		}
+	}
+	// Ensure no text block was emitted.
+	for _, e := range events {
+		if e["type"] == "content_block_start" {
+			b := e["content_block"].(map[string]any)
+			if b["type"] == "text" {
+				t.Fatalf("unexpected text content_block_start")
+			}
+		}
+	}
+}
+
+// TestConverter_FinishReasonFunctionCall verifies that the legacy
+// finish_reason "function_call" (older OpenAI tool-calling protocol) is
+// not in the explicit switch and falls through the default passthrough
+// branch. Mirrors SoT service/llm/converter.go:2020-2033.
+func TestConverter_FinishReasonFunctionCall(t *testing.T) {
+	input := `
+{"choices":[{"delta":{"content":"x"}}]}
+{"choices":[{"finish_reason":"function_call","delta":{}}]}
+`
+	events := runConverter(t, input)
+	var got string
+	for _, e := range events {
+		if e["type"] == "message_delta" {
+			d := e["delta"].(map[string]any)
+			got, _ = d["stop_reason"].(string)
+		}
+	}
+	// The default branch passes the reason through (lower-cased by
+	// createMessageDelta). The exact string is preserved.
+	if got != "function_call" {
+		t.Fatalf("stop_reason = %q, want function_call (passthrough)", got)
+	}
+}
+
+// TestConverter_FinishReasonMissing: when no finish_reason is sent and
+// no tool_call is open, the converter must still terminate cleanly with
+// an empty stop_reason (no panic, no missing message_stop).
+func TestConverter_FinishReasonMissing(t *testing.T) {
+	input := `
+{"choices":[{"delta":{"content":"hello"}}]}
+`
+	events := runConverter(t, input)
+	var sawStop bool
+	var sawDelta bool
+	for _, e := range events {
+		if e["type"] == "message_stop" {
+			sawStop = true
+		}
+		if e["type"] == "message_delta" {
+			sawDelta = true
+			d := e["delta"].(map[string]any)
+			if sr, _ := d["stop_reason"].(string); sr != "" {
+				t.Fatalf("stop_reason = %q, want empty when finish_reason is missing", sr)
+			}
+		}
+	}
+	if !sawDelta {
+		t.Fatalf("no message_delta emitted")
+	}
+	if !sawStop {
+		t.Fatalf("no message_stop emitted")
+	}
+}
+
+// TestConverter_FinishReasonNull: explicit null finish_reason should
+// behave the same as missing - just leave stop_reason empty.
+func TestConverter_FinishReasonNull(t *testing.T) {
+	input := `
+{"choices":[{"delta":{"content":"hi"},"finish_reason":null}]}
+`
+	events := runConverter(t, input)
+	for _, e := range events {
+		if e["type"] == "message_delta" {
+			d := e["delta"].(map[string]any)
+			if sr, _ := d["stop_reason"].(string); sr != "" {
+				t.Fatalf("stop_reason = %q, want empty for null finish_reason", sr)
+			}
+		}
+	}
+}
