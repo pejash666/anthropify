@@ -17,13 +17,14 @@ import (
 // StreamSummary distills a finished stream into the values every E2E
 // test wants to assert on (text, stop reason, usage, block types).
 type StreamSummary struct {
-	EventTypes   []string
-	Text         string
-	StopReason   string
-	InputTokens  int64
-	OutputTokens int64
-	ToolUseIDs   []string
-	BlockTypes   []string
+	EventTypes           []string
+	Text                 string
+	StopReason           string
+	InputTokens          int64
+	OutputTokens         int64
+	CacheReadInputTokens int64
+	ToolUseIDs           []string
+	BlockTypes           []string
 }
 
 // DrainStream consumes a *hybridstream.StreamReader and returns a
@@ -52,8 +53,9 @@ func DrainStream(t *testing.T, stream *hybridstream.StreamReader) StreamSummary 
 			var m struct {
 				Message struct {
 					Usage struct {
-						InputTokens  int64 `json:"input_tokens"`
-						OutputTokens int64 `json:"output_tokens"`
+						InputTokens          int64 `json:"input_tokens"`
+						OutputTokens         int64 `json:"output_tokens"`
+						CacheReadInputTokens int64 `json:"cache_read_input_tokens"`
 					} `json:"usage"`
 				} `json:"message"`
 			}
@@ -63,6 +65,9 @@ func DrainStream(t *testing.T, stream *hybridstream.StreamReader) StreamSummary 
 				}
 				if m.Message.Usage.OutputTokens > 0 {
 					s.OutputTokens = m.Message.Usage.OutputTokens
+				}
+				if m.Message.Usage.CacheReadInputTokens > 0 {
+					s.CacheReadInputTokens = m.Message.Usage.CacheReadInputTokens
 				}
 			}
 		case "content_block_start":
@@ -90,8 +95,9 @@ func DrainStream(t *testing.T, stream *hybridstream.StreamReader) StreamSummary 
 					StopReason string `json:"stop_reason"`
 				} `json:"delta"`
 				Usage struct {
-					InputTokens  int64 `json:"input_tokens"`
-					OutputTokens int64 `json:"output_tokens"`
+					InputTokens          int64 `json:"input_tokens"`
+					OutputTokens         int64 `json:"output_tokens"`
+					CacheReadInputTokens int64 `json:"cache_read_input_tokens"`
 				} `json:"usage"`
 			}
 			if err := json.Unmarshal(raw, &d); err == nil {
@@ -103,6 +109,9 @@ func DrainStream(t *testing.T, stream *hybridstream.StreamReader) StreamSummary 
 				}
 				if d.Usage.OutputTokens > 0 {
 					s.OutputTokens = d.Usage.OutputTokens
+				}
+				if d.Usage.CacheReadInputTokens > 0 {
+					s.CacheReadInputTokens = d.Usage.CacheReadInputTokens
 				}
 			}
 		}
@@ -136,12 +145,16 @@ func AssertStopReason(t *testing.T, s StreamSummary, accepted ...string) {
 	t.Fatalf("stop_reason = %q, want one of %v", s.StopReason, accepted)
 }
 
-// AssertInputTokensPositive fails when usage.input_tokens was not
-// reported (or was zero). All adapters are expected to forward usage.
+// AssertInputTokensPositive fails when no input-side usage was reported.
+// Counts either input_tokens or cache_read_input_tokens as evidence that
+// the adapter forwarded usage: providers such as Moonshot may report
+// the entire prompt as cached (input_tokens=0, cache_read>0), which is
+// still a valid usage report under Anthropic semantics.
 func AssertInputTokensPositive(t *testing.T, s StreamSummary) {
 	t.Helper()
-	if s.InputTokens <= 0 {
-		t.Fatalf("usage.input_tokens = %d, want > 0", s.InputTokens)
+	if s.InputTokens <= 0 && s.CacheReadInputTokens <= 0 {
+		t.Fatalf("usage.input_tokens = %d, cache_read_input_tokens = %d, want at least one > 0",
+			s.InputTokens, s.CacheReadInputTokens)
 	}
 }
 

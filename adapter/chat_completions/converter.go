@@ -97,6 +97,17 @@ func (c *Converter) ConvertEvent(openaiEvent string) []string {
 	choices, _ := m["choices"].([]any)
 	for _, ch := range choices {
 		choice, _ := ch.(map[string]any)
+		// Moonshot (api.moonshot.ai) emits final usage nested
+		// inside choices[0].usage rather than at the top level
+		// when stream_options.include_usage is not requested.
+		// Pick it up here so input_tokens / output_tokens are not
+		// lost. Top-level usage (standard OpenAI shape) still wins
+		// because it is processed above.
+		if len(c.accumulatedUsage) == 0 {
+			if usage, ok := choice["usage"].(map[string]any); ok {
+				c.accumulatedUsage = usage
+			}
+		}
 		if delta, ok := choice["delta"].(map[string]any); ok {
 			// reasoning_content: Kimi k2-thinking / DeepSeek-reasoner /
 			// GLM-4.7 etc.
