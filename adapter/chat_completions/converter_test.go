@@ -662,3 +662,54 @@ func TestConverter_FinishReasonNull(t *testing.T) {
 		}
 	}
 }
+
+// TestConverter_UsageOnMessageDelta verifies that final usage is also
+// emitted on the message_delta event (per Anthropic streaming spec),
+// not only on message_stop. The Anthropic SDK exposes Usage from
+// message_delta, so omitting input_tokens there causes downstream
+// clients to observe InputTokens = 0 even when the upstream reported
+// a non-zero count (regression seen with GLM, which only carries
+// usage on the final chunk).
+func TestConverter_UsageOnMessageDelta(t *testing.T) {
+	input := `
+{"choices":[{"delta":{"content":"hi"}}]}
+{"choices":[{"finish_reason":"stop","delta":{}}],"usage":{"prompt_tokens":17,"completion_tokens":4,"prompt_tokens_details":{"cached_tokens":5}}}
+`
+	events := runConverter(t, input)
+	var deltaUsage, stopUsage map[string]any
+	for _, e := range events {
+		if e["type"] == "message_delta" {
+			if u, ok := e["usage"].(map[string]any); ok {
+				deltaUsage = u
+			}
+		}
+		if e["type"] == "message_stop" {
+			if u, ok := e["usage"].(map[string]any); ok {
+				stopUsage = u
+			}
+		}
+	}
+	if deltaUsage == nil {
+		t.Fatalf("no usage block on message_delta (Anthropic SDK reads from here)")
+	}
+	if deltaUsage["input_tokens"].(float64) != 12 { // 17 - 5 cached
+		t.Fatalf("message_delta input_tokens = %v, want 12", deltaUsage["input_tokens"])
+	}
+	if deltaUsage["output_tokens"].(float64) != 4 {
+		t.Fatalf("message_delta output_tokens = %v, want 4", deltaUsage["output_tokens"])
+	}
+	if deltaUsage["cache_read_input_tokens"].(float64) != 5 {
+		t.Fatalf("message_delta cache_read_input_tokens = %v, want 5", deltaUsage["cache_read_input_tokens"])
+	}
+	if deltaUsage["cache_creation_input_tokens"].(float64) != 0 {
+		t.Fatalf("message_delta cache_creation_input_tokens = %v, want 0", deltaUsage["cache_creation_input_tokens"])
+	}
+	// message_stop must still carry usage for backwards-compatible
+	// consumers / SoT parity.
+	if stopUsage == nil {
+		t.Fatalf("message_stop usage should still be present for parity with proxy SoT")
+	}
+	if stopUsage["input_tokens"].(float64) != 12 {
+		t.Fatalf("message_stop input_tokens = %v, want 12", stopUsage["input_tokens"])
+	}
+}

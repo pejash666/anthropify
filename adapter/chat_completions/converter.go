@@ -465,6 +465,58 @@ func (c *Converter) createContentBlockStop(index int) string {
 	return string(b)
 }
 
+// buildAnthropicUsage converts the OpenAI-style accumulatedUsage map
+// into an Anthropic-style usage object. Returns nil when no usage has
+// been accumulated.
+func (c *Converter) buildAnthropicUsage() map[string]any {
+	if len(c.accumulatedUsage) == 0 {
+		return nil
+	}
+
+	var promptTokens int
+	if v, ok := c.accumulatedUsage["prompt_tokens"].(float64); ok {
+		promptTokens = int(v)
+	} else if v, ok := c.accumulatedUsage["prompt_tokens"].(int); ok {
+		promptTokens = v
+	}
+
+	var completionTokens int
+	if v, ok := c.accumulatedUsage["completion_tokens"].(float64); ok {
+		completionTokens = int(v)
+	} else if v, ok := c.accumulatedUsage["completion_tokens"].(int); ok {
+		completionTokens = v
+	}
+
+	// cached_tokens: support both nested (OpenAI / GLM) and flat
+	// (Gemini-via-OpenAI) layouts.
+	var cachedTokens int
+	if details, ok := c.accumulatedUsage["prompt_tokens_details"].(map[string]any); ok {
+		if cached, ok := details["cached_tokens"].(float64); ok {
+			cachedTokens = int(cached)
+		} else if cached, ok := details["cached_tokens"].(int); ok {
+			cachedTokens = cached
+		}
+	}
+	if cachedTokens == 0 {
+		if v, ok := c.accumulatedUsage["cached_tokens"].(float64); ok {
+			cachedTokens = int(v)
+		} else if v, ok := c.accumulatedUsage["cached_tokens"].(int); ok {
+			cachedTokens = v
+		}
+	}
+
+	// OpenAI/GLM/Gemini: prompt_tokens already includes cached.
+	// Anthropic: input_tokens excludes cache_read_input_tokens.
+	inputTokens := promptTokens - cachedTokens
+
+	return map[string]any{
+		"input_tokens":                inputTokens,
+		"output_tokens":               completionTokens,
+		"cache_read_input_tokens":     cachedTokens,
+		"cache_creation_input_tokens": 0,
+	}
+}
+
 func (c *Converter) createMessageDelta() string {
 	stopReason := strings.ToLower(c.stopReason)
 
@@ -478,17 +530,13 @@ func (c *Converter) createMessageDelta() string {
 		"delta": delta,
 	}
 
-	// Anthropic's message_delta carries usage.output_tokens.
-	if len(c.accumulatedUsage) > 0 {
-		var outputTokens int
-		if v, ok := c.accumulatedUsage["completion_tokens"].(float64); ok {
-			outputTokens = int(v)
-		} else if v, ok := c.accumulatedUsage["completion_tokens"].(int); ok {
-			outputTokens = v
-		}
-		event["usage"] = map[string]any{
-			"output_tokens": outputTokens,
-		}
+	// Per Anthropic streaming spec, message_delta.usage carries the
+	// final cumulative usage (input_tokens, output_tokens, cache
+	// fields). The Anthropic SDK only surfaces Usage from this event,
+	// so omitting input_tokens here would surface as InputTokens=0 on
+	// the client even when the upstream reported a non-zero count.
+	if usage := c.buildAnthropicUsage(); usage != nil {
+		event["usage"] = usage
 	}
 
 	b, _ := json.Marshal(event)
@@ -497,52 +545,12 @@ func (c *Converter) createMessageDelta() string {
 
 func (c *Converter) createMessageStop() string {
 	event := map[string]any{"type": "message_stop"}
-	if len(c.accumulatedUsage) > 0 {
-		anthropicUsage := map[string]any{}
-
-		var promptTokens int
-		if v, ok := c.accumulatedUsage["prompt_tokens"].(float64); ok {
-			promptTokens = int(v)
-		} else if v, ok := c.accumulatedUsage["prompt_tokens"].(int); ok {
-			promptTokens = v
-		}
-
-		var completionTokens int
-		if v, ok := c.accumulatedUsage["completion_tokens"].(float64); ok {
-			completionTokens = int(v)
-		} else if v, ok := c.accumulatedUsage["completion_tokens"].(int); ok {
-			completionTokens = v
-		}
-
-		// cached_tokens: support both nested (OpenAI / GLM) and flat
-		// (Gemini-via-OpenAI) layouts.
-		var cachedTokens int
-		if details, ok := c.accumulatedUsage["prompt_tokens_details"].(map[string]any); ok {
-			if cached, ok := details["cached_tokens"].(float64); ok {
-				cachedTokens = int(cached)
-			} else if cached, ok := details["cached_tokens"].(int); ok {
-				cachedTokens = cached
-			}
-		}
-		if cachedTokens == 0 {
-			if v, ok := c.accumulatedUsage["cached_tokens"].(float64); ok {
-				cachedTokens = int(v)
-			} else if v, ok := c.accumulatedUsage["cached_tokens"].(int); ok {
-				cachedTokens = v
-			}
-		}
-
-		// OpenAI/GLM/Gemini: prompt_tokens already includes cached.
-		// Anthropic: input_tokens excludes cache_read_input_tokens.
-		inputTokens := promptTokens - cachedTokens
-
-		anthropicUsage["input_tokens"] = inputTokens
-		anthropicUsage["output_tokens"] = completionTokens
-		// Always emit cache fields, even if zero, per Anthropic spec.
-		anthropicUsage["cache_read_input_tokens"] = cachedTokens
-		anthropicUsage["cache_creation_input_tokens"] = 0
-
-		event["usage"] = anthropicUsage
+	// Anthropic spec places final usage on message_delta. We still
+	// emit it on message_stop for backwards compatibility with
+	// consumers (and parity with the proxy SoT in
+	// service/llm/converter.go) that read from there.
+	if usage := c.buildAnthropicUsage(); usage != nil {
+		event["usage"] = usage
 	}
 	b, _ := json.Marshal(event)
 	return string(b)
