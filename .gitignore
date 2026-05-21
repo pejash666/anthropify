@@ -1,0 +1,13 @@
+# Local E2E credentials. Never commit. The .example template is kept.
+.env.e2e
+!.env.e2e.example
+
+# Recorded SSE fixtures from real provider calls. Replayable artifacts
+# (hand-curated) live in testdata/fixtures/, but anything under
+# recorded/ is byte-for-byte from a live API and must stay local.
+testdata/fixtures/recorded/
+
+# Common ignores
+*.test
+*.out
+.DS_Store

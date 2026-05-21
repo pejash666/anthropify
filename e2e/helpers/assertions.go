@@ -1,0 +1,206 @@
+//go:build e2e
+
+package helpers
+
+import (
+	"context"
+	"encoding/json"
+	"strings"
+	"testing"
+
+	"github.com/anthropics/anthropic-sdk-go"
+
+	"github.com/shahao/hybridstream"
+)
+
+// StreamSummary distills a finished stream into the values every E2E
+// test wants to assert on (text, stop reason, usage, block types).
+type StreamSummary struct {
+	EventTypes   []string
+	Text         string
+	StopReason   string
+	InputTokens  int64
+	OutputTokens int64
+	ToolUseIDs   []string
+	BlockTypes   []string
+}
+
+// DrainStream consumes a *hybridstream.StreamReader and returns a
+// summary plus the first transport error, if any. Tests call this with
+// the StreamReader produced by client.CreateMessageStream.
+func DrainStream(t *testing.T, stream *hybridstream.StreamReader) StreamSummary {
+	t.Helper()
+	var s StreamSummary
+	var text strings.Builder
+	for stream.Next() {
+		raw := stream.CurrentRaw()
+		var peek struct {
+			Type    string          `json:"type"`
+			Index   int             `json:"index"`
+			Message json.RawMessage `json:"message"`
+			Content json.RawMessage `json:"content_block"`
+			Delta   json.RawMessage `json:"delta"`
+			Usage   json.RawMessage `json:"usage"`
+		}
+		if err := json.Unmarshal(raw, &peek); err != nil {
+			continue
+		}
+		s.EventTypes = append(s.EventTypes, peek.Type)
+		switch peek.Type {
+		case "message_start":
+			var m struct {
+				Message struct {
+					Usage struct {
+						InputTokens  int64 `json:"input_tokens"`
+						OutputTokens int64 `json:"output_tokens"`
+					} `json:"usage"`
+				} `json:"message"`
+			}
+			if err := json.Unmarshal(raw, &m); err == nil {
+				if m.Message.Usage.InputTokens > 0 {
+					s.InputTokens = m.Message.Usage.InputTokens
+				}
+				if m.Message.Usage.OutputTokens > 0 {
+					s.OutputTokens = m.Message.Usage.OutputTokens
+				}
+			}
+		case "content_block_start":
+			var cb struct {
+				Type string `json:"type"`
+				ID   string `json:"id"`
+			}
+			_ = json.Unmarshal(peek.Content, &cb)
+			s.BlockTypes = append(s.BlockTypes, cb.Type)
+			if cb.Type == "tool_use" && cb.ID != "" {
+				s.ToolUseIDs = append(s.ToolUseIDs, cb.ID)
+			}
+		case "content_block_delta":
+			var d struct {
+				Type string `json:"type"`
+				Text string `json:"text"`
+			}
+			_ = json.Unmarshal(peek.Delta, &d)
+			if d.Type == "text_delta" {
+				text.WriteString(d.Text)
+			}
+		case "message_delta":
+			var d struct {
+				Delta struct {
+					StopReason string `json:"stop_reason"`
+				} `json:"delta"`
+				Usage struct {
+					InputTokens  int64 `json:"input_tokens"`
+					OutputTokens int64 `json:"output_tokens"`
+				} `json:"usage"`
+			}
+			if err := json.Unmarshal(raw, &d); err == nil {
+				if d.Delta.StopReason != "" {
+					s.StopReason = d.Delta.StopReason
+				}
+				if d.Usage.InputTokens > 0 {
+					s.InputTokens = d.Usage.InputTokens
+				}
+				if d.Usage.OutputTokens > 0 {
+					s.OutputTokens = d.Usage.OutputTokens
+				}
+			}
+		}
+	}
+	if err := stream.Err(); err != nil {
+		t.Fatalf("stream err: %v", err)
+	}
+	s.Text = text.String()
+	return s
+}
+
+// AssertNonEmptyText fails the test when no text_delta content was
+// observed.
+func AssertNonEmptyText(t *testing.T, s StreamSummary) {
+	t.Helper()
+	if strings.TrimSpace(s.Text) == "" {
+		t.Fatalf("expected non-empty text, got %q (events: %v)", s.Text, s.EventTypes)
+	}
+}
+
+// AssertStopReason fails the test when the observed stop_reason doesn't
+// match any of the accepted values. Multiple values are accepted because
+// provider mapping has minor variations (e.g. tool_use vs end_turn).
+func AssertStopReason(t *testing.T, s StreamSummary, accepted ...string) {
+	t.Helper()
+	for _, want := range accepted {
+		if s.StopReason == want {
+			return
+		}
+	}
+	t.Fatalf("stop_reason = %q, want one of %v", s.StopReason, accepted)
+}
+
+// AssertInputTokensPositive fails when usage.input_tokens was not
+// reported (or was zero). All adapters are expected to forward usage.
+func AssertInputTokensPositive(t *testing.T, s StreamSummary) {
+	t.Helper()
+	if s.InputTokens <= 0 {
+		t.Fatalf("usage.input_tokens = %d, want > 0", s.InputTokens)
+	}
+}
+
+// AssertEventEnvelope checks that the stream emitted the canonical
+// message_start ... message_stop bookends.
+func AssertEventEnvelope(t *testing.T, s StreamSummary) {
+	t.Helper()
+	if len(s.EventTypes) == 0 {
+		t.Fatalf("no events emitted")
+	}
+	if s.EventTypes[0] != "message_start" {
+		t.Fatalf("first event = %q, want message_start", s.EventTypes[0])
+	}
+	last := s.EventTypes[len(s.EventTypes)-1]
+	if last != "message_stop" {
+		t.Fatalf("last event = %q, want message_stop", last)
+	}
+}
+
+// AssertHasToolUse fails when no tool_use block was emitted. Returns
+// the first tool_use_id for follow-up requests.
+func AssertHasToolUse(t *testing.T, s StreamSummary) string {
+	t.Helper()
+	if len(s.ToolUseIDs) == 0 {
+		t.Fatalf("expected a tool_use block; got block types %v", s.BlockTypes)
+	}
+	return s.ToolUseIDs[0]
+}
+
+// AssertNonStreamingMessage validates the *anthropic.Message returned by
+// client.CreateMessage. Checks that role==assistant, content is
+// non-empty, and stop_reason is set.
+func AssertNonStreamingMessage(t *testing.T, msg *anthropic.Message) {
+	t.Helper()
+	if msg == nil {
+		t.Fatalf("nil message")
+	}
+	if msg.Role != "assistant" {
+		t.Fatalf("role = %q, want assistant", msg.Role)
+	}
+	if len(msg.Content) == 0 {
+		t.Fatalf("empty content blocks")
+	}
+	if msg.StopReason == "" {
+		t.Fatalf("stop_reason is empty")
+	}
+}
+
+// RecordingTransport is the placeholder hook for fixture recording. When
+// E2E_RECORD_FIXTURES=true the harness should wrap the
+// hybridstream.WithHTTPClient transport to mirror raw SSE bytes into
+// testdata/fixtures/recorded/<provider>/<test>.sse.
+//
+// TODO: implement. Today this is a no-op so the type compiles cleanly.
+type RecordingTransport struct {
+	Provider string
+	TestName string
+}
+
+// WrapContext is reserved for future use; today it returns ctx
+// unchanged. The signature is fixed so we can wire it through every
+// test without churn later.
+func (r *RecordingTransport) WrapContext(ctx context.Context) context.Context { return ctx }

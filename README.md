@@ -107,6 +107,22 @@ go test ./...
 Tests are fixture-driven (see `adapter/openai_responses/testdata/`) and
 do not hit any real network endpoint.
 
+### E2E testing
+
+Real-network smoke tests live under `e2e/` and are gated behind a build
+tag, so `go test ./...` never touches them.
+
+```sh
+cp .env.e2e.example .env.e2e   # fill in only the providers you have keys for
+make test-e2e                  # loads .env.e2e and runs `go test -tags=e2e ./e2e/...`
+```
+
+Providers whose API key is unset are skipped automatically; the suite
+never fails because of a missing credential. See `e2e/README.md` for the
+full matrix and per-provider test breakdown.
+
+> `.env.e2e` is git-ignored. Only `.env.e2e.example` is tracked.
+
 ## License
 
 MIT
