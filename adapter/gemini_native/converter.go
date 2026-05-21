@@ -368,9 +368,21 @@ func (c *Converter) createMessageDelta() string {
 			"stop_reason":   stopReason,
 			"stop_sequence": nil,
 		},
-		"usage": map[string]any{
-			"output_tokens": 0,
-		},
+	}
+	// Per Anthropic streaming spec, message_delta.usage carries the
+	// final cumulative usage (input_tokens, output_tokens, cache_*).
+	// The Anthropic SDK and the hybridstream harness only surface
+	// usage from message_start / message_delta, so omitting it here
+	// would surface as InputTokens=0 / OutputTokens=0 on the client
+	// even when Gemini reported non-zero counts in its usageMetadata.
+	// Parity: chat_completions and openai_responses adapters already
+	// emit usage on message_delta.
+	if u := c.convertUsage(); u != nil {
+		event["usage"] = u
+	} else {
+		// Preserve the previous shape when no usage was captured so
+		// downstream readers still see a usage object.
+		event["usage"] = map[string]any{"output_tokens": 0}
 	}
 	b, _ := json.Marshal(event)
 	return string(b)
@@ -378,6 +390,10 @@ func (c *Converter) createMessageDelta() string {
 
 func (c *Converter) createMessageStop() string {
 	event := map[string]any{"type": "message_stop"}
+	// Anthropic spec places final usage on message_delta. We still
+	// emit it on message_stop for backwards compatibility with
+	// consumers (and parity with the chat_completions /
+	// openai_responses adapters) that read from there.
 	if u := c.convertUsage(); u != nil {
 		event["usage"] = u
 	}

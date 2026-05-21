@@ -262,8 +262,12 @@ func TestConverter_Refusal(t *testing.T) {
 }
 
 // TestConverter_UsageMapping ensures Gemini usageMetadata becomes the
-// Anthropic-flavoured usage block on message_stop (and that
-// promptTokenCount has cached subtracted out).
+// Anthropic-flavoured usage block on message_delta (the
+// protocol-correct location per Anthropic's streaming spec) and that
+// promptTokenCount has cached subtracted out. message_stop is also
+// allowed to carry the same usage block for backwards compatibility,
+// but the canonical reader (and the hybridstream e2e harness) only
+// looks at message_start / message_delta.
 func TestConverter_UsageMapping(t *testing.T) {
 	input := `
 {"candidates":[{"content":{"role":"model","parts":[{"text":"x"}]}}]}
@@ -272,7 +276,7 @@ func TestConverter_UsageMapping(t *testing.T) {
 	events := runConverter(t, input)
 	var usage map[string]any
 	for _, e := range events {
-		if e["type"] == "message_stop" {
+		if e["type"] == "message_delta" {
 			if u, ok := e["usage"].(map[string]any); ok {
 				usage = u
 				break
@@ -280,7 +284,7 @@ func TestConverter_UsageMapping(t *testing.T) {
 		}
 	}
 	if usage == nil {
-		t.Fatalf("no usage block in message_stop")
+		t.Fatalf("no usage block in message_delta")
 	}
 	if usage["input_tokens"].(float64) != 70 { // 100 - 30 cached
 		t.Fatalf("input_tokens = %v, want 70", usage["input_tokens"])
@@ -293,6 +297,123 @@ func TestConverter_UsageMapping(t *testing.T) {
 	}
 	if usage["thoughts_tokens"].(float64) != 5 {
 		t.Fatalf("thoughts_tokens = %v, want 5", usage["thoughts_tokens"])
+	}
+}
+
+// TestConverter_UsageOnMessageDelta_NoCache: a usage payload without
+// cachedContentTokenCount must still map cleanly (cache_read=0,
+// input_tokens=prompt).
+func TestConverter_UsageOnMessageDelta_NoCache(t *testing.T) {
+	input := `
+{"candidates":[{"content":{"role":"model","parts":[{"text":"hi"}]}}]}
+{"candidates":[{"finishReason":"STOP","content":{"role":"model","parts":[]}}],"usageMetadata":{"promptTokenCount":11,"candidatesTokenCount":7}}
+`
+	events := runConverter(t, input)
+	var usage map[string]any
+	for _, e := range events {
+		if e["type"] == "message_delta" {
+			if u, ok := e["usage"].(map[string]any); ok {
+				usage = u
+				break
+			}
+		}
+	}
+	if usage == nil {
+		t.Fatalf("no usage block in message_delta")
+	}
+	if usage["input_tokens"].(float64) != 11 {
+		t.Fatalf("input_tokens = %v, want 11", usage["input_tokens"])
+	}
+	if usage["output_tokens"].(float64) != 7 {
+		t.Fatalf("output_tokens = %v, want 7", usage["output_tokens"])
+	}
+	if usage["cache_read_input_tokens"].(float64) != 0 {
+		t.Fatalf("cache_read_input_tokens = %v, want 0", usage["cache_read_input_tokens"])
+	}
+}
+
+// TestConverter_StopReasonOnMessageDelta verifies the stop_reason is
+// carried by message_delta (not message_stop) per Anthropic protocol.
+func TestConverter_StopReasonOnMessageDelta(t *testing.T) {
+	input := `
+{"candidates":[{"content":{"role":"model","parts":[{"text":"x"}]}}]}
+{"candidates":[{"finishReason":"STOP","content":{"role":"model","parts":[]}}],"usageMetadata":{"promptTokenCount":3,"candidatesTokenCount":1}}
+`
+	events := runConverter(t, input)
+
+	var deltaStop, stopEventHadStopReason any
+	for _, e := range events {
+		if e["type"] == "message_delta" {
+			d := e["delta"].(map[string]any)
+			deltaStop = d["stop_reason"]
+		}
+		if e["type"] == "message_stop" {
+			if _, ok := e["delta"]; ok {
+				stopEventHadStopReason = e["delta"]
+			}
+		}
+	}
+	if deltaStop != "end_turn" {
+		t.Fatalf("message_delta.stop_reason = %v, want end_turn", deltaStop)
+	}
+	if stopEventHadStopReason != nil {
+		t.Fatalf("message_stop must not carry a delta/stop_reason, got %v", stopEventHadStopReason)
+	}
+}
+
+// TestConverter_UsageOnMessageStop_Compat: message_stop may still carry
+// a usage block for backwards compatibility with consumers that read
+// from there. This is parity behaviour with chat_completions and
+// openai_responses adapters.
+func TestConverter_UsageOnMessageStop_Compat(t *testing.T) {
+	input := `
+{"candidates":[{"content":{"role":"model","parts":[{"text":"x"}]}}]}
+{"candidates":[{"finishReason":"STOP","content":{"role":"model","parts":[]}}],"usageMetadata":{"promptTokenCount":4,"candidatesTokenCount":2}}
+`
+	events := runConverter(t, input)
+	var usage map[string]any
+	for _, e := range events {
+		if e["type"] == "message_stop" {
+			if u, ok := e["usage"].(map[string]any); ok {
+				usage = u
+			}
+		}
+	}
+	if usage == nil {
+		t.Fatalf("expected message_stop to carry compat usage block")
+	}
+	if usage["input_tokens"].(float64) != 4 {
+		t.Fatalf("message_stop usage.input_tokens = %v, want 4", usage["input_tokens"])
+	}
+	if usage["output_tokens"].(float64) != 2 {
+		t.Fatalf("message_stop usage.output_tokens = %v, want 2", usage["output_tokens"])
+	}
+}
+
+// TestConverter_MessageDelta_NoUsage_FallbackShape ensures the
+// message_delta event remains well-formed (with a placeholder
+// output_tokens=0 usage object) when no usageMetadata was observed.
+func TestConverter_MessageDelta_NoUsage_FallbackShape(t *testing.T) {
+	input := `
+{"candidates":[{"content":{"role":"model","parts":[{"text":"x"}]}}]}
+{"candidates":[{"finishReason":"STOP","content":{"role":"model","parts":[]}}]}
+`
+	events := runConverter(t, input)
+	var found bool
+	for _, e := range events {
+		if e["type"] == "message_delta" {
+			found = true
+			u, ok := e["usage"].(map[string]any)
+			if !ok {
+				t.Fatalf("message_delta missing usage placeholder")
+			}
+			if _, ok := u["output_tokens"]; !ok {
+				t.Fatalf("placeholder usage missing output_tokens, got %v", u)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("no message_delta emitted")
 	}
 }
 
