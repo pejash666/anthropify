@@ -117,10 +117,9 @@ func (a *Adapter) Stream(ctx context.Context, req anthropicsdk.MessageNewParams)
 	return ch, nil
 }
 
-// errUnsupported is returned by Invoke; the sentinel lives in the parent
-// package, so we re-export it through a small shim to avoid an import
-// cycle (parent imports this package).
-var errUnsupported = errors.New("hybridstream: feature not yet supported")
+// errUnsupported mirrors the parent package's sentinel; we duplicate it
+// here to avoid an import cycle.
+var errUnsupported = adapter.ErrUnsupported
 
 // ErrUnsupported is exposed so callers can errors.Is against it.
 var ErrUnsupported = errUnsupported

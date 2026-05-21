@@ -9,6 +9,8 @@ import (
 	"errors"
 
 	"github.com/anthropics/anthropic-sdk-go"
+
+	"github.com/shahao/hybridstream/adapter"
 )
 
 // ProviderKind identifies one of the supported backends.
@@ -49,9 +51,12 @@ var (
 	// ErrStreamClosed is returned by StreamReader when the upstream stream
 	// has been fully consumed.
 	ErrStreamClosed = errors.New("hybridstream: stream closed")
-	// ErrUnsupported is returned by adapters that are scaffolded but not
-	// yet implemented.
-	ErrUnsupported = errors.New("hybridstream: feature not yet supported")
+	// ErrUnsupported is returned by adapters that lack a native
+	// non-streaming endpoint. The top-level Client uses errors.Is to
+	// detect this sentinel and falls back to draining Stream. It is an
+	// alias of adapter.ErrUnsupported so every adapter and the parent
+	// package share one comparable value.
+	ErrUnsupported = adapter.ErrUnsupported
 )
 
 // DecodeEvent parses a raw Anthropic-JSON event payload into a typed event.

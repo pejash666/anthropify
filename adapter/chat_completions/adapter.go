@@ -168,7 +168,7 @@ func (a *Adapter) buildEndpoint() string {
 
 // errUnsupported mirrors the parent package's sentinel; we duplicate it
 // here to avoid an import cycle.
-var errUnsupported = errors.New("hybridstream: feature not yet supported")
+var errUnsupported = adapter.ErrUnsupported
 
 // ErrUnsupported is exposed so callers can errors.Is against it.
 var ErrUnsupported = errUnsupported

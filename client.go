@@ -3,6 +3,7 @@ package hybridstream
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -122,7 +123,7 @@ func (c *Client) CreateMessage(ctx context.Context, req anthropic.MessageNewPara
 	ctx = withLogger(ctx, c.cfg.logger)
 	if msg, err := ad.Invoke(ctx, req2); err == nil {
 		return msg, nil
-	} else if err != ErrUnsupported {
+	} else if !errors.Is(err, ErrUnsupported) {
 		return nil, err
 	}
 	// Fallback: drain the stream and assemble.
@@ -173,8 +174,21 @@ func (c *Client) dispatch(req anthropic.MessageNewParams) (adapter.Adapter, anth
 // Message. It intentionally ignores fields it does not understand.
 func assembleFromStream(ch <-chan adapter.RawEvent) (*anthropic.Message, error) {
 	var msg anthropic.Message
-	var blockTexts []string
-	var blockTypes []string
+	// Per-block scratch state. blockStarts holds the original
+	// content_block_start payload as a generic map so we can mutate it
+	// (e.g. accumulate text/thinking/input_json) before materialising.
+	var blockStarts []map[string]any
+	var blockTexts []string         // accumulated text/thinking
+	var blockToolInputJSON []string // accumulated tool_use partial_json
+
+	ensureIndex := func(i int) {
+		for len(blockStarts) <= i {
+			blockStarts = append(blockStarts, map[string]any{"type": "text"})
+			blockTexts = append(blockTexts, "")
+			blockToolInputJSON = append(blockToolInputJSON, "")
+		}
+	}
+
 	for evt := range ch {
 		if evt.Err != nil {
 			return nil, evt.Err
@@ -196,32 +210,37 @@ func assembleFromStream(ch <-chan adapter.RawEvent) (*anthropic.Message, error) 
 				_ = json.Unmarshal(peek.Message, &msg)
 			}
 		case "content_block_start":
-			var cb struct {
-				Type string `json:"type"`
-				Text string `json:"text"`
+			var cb map[string]any
+			if err := json.Unmarshal(peek.Content, &cb); err != nil || cb == nil {
+				cb = map[string]any{"type": "text"}
 			}
-			_ = json.Unmarshal(peek.Content, &cb)
-			for len(blockTexts) <= peek.Index {
-				blockTexts = append(blockTexts, "")
-				blockTypes = append(blockTypes, "")
+			ensureIndex(peek.Index)
+			blockStarts[peek.Index] = cb
+			if t, _ := cb["type"].(string); t == "text" {
+				if s, ok := cb["text"].(string); ok {
+					blockTexts[peek.Index] = s
+				}
+			} else if t == "thinking" {
+				if s, ok := cb["thinking"].(string); ok {
+					blockTexts[peek.Index] = s
+				}
 			}
-			blockTypes[peek.Index] = cb.Type
-			blockTexts[peek.Index] = cb.Text
 		case "content_block_delta":
 			var d struct {
-				Type     string `json:"type"`
-				Text     string `json:"text"`
-				Thinking string `json:"thinking"`
+				Type        string `json:"type"`
+				Text        string `json:"text"`
+				Thinking    string `json:"thinking"`
+				PartialJSON string `json:"partial_json"`
 			}
 			_ = json.Unmarshal(peek.Delta, &d)
-			if peek.Index >= len(blockTexts) {
-				continue
-			}
+			ensureIndex(peek.Index)
 			switch d.Type {
 			case "text_delta":
 				blockTexts[peek.Index] += d.Text
 			case "thinking_delta":
 				blockTexts[peek.Index] += d.Thinking
+			case "input_json_delta":
+				blockToolInputJSON[peek.Index] += d.PartialJSON
 			}
 		case "message_delta":
 			var d struct {
@@ -235,20 +254,73 @@ func assembleFromStream(ch <-chan adapter.RawEvent) (*anthropic.Message, error) 
 			if d.StopSequence != "" {
 				msg.StopSequence = d.StopSequence
 			}
+			// Usage from message_delta carries the final output_tokens
+			// (and may restate input_tokens). Merge non-zero fields.
+			if len(peek.Usage) > 0 {
+				var u struct {
+					InputTokens              int64 `json:"input_tokens"`
+					OutputTokens             int64 `json:"output_tokens"`
+					CacheCreationInputTokens int64 `json:"cache_creation_input_tokens"`
+					CacheReadInputTokens     int64 `json:"cache_read_input_tokens"`
+				}
+				if err := json.Unmarshal(peek.Usage, &u); err == nil {
+					if u.InputTokens > 0 {
+						msg.Usage.InputTokens = u.InputTokens
+					}
+					if u.OutputTokens > 0 {
+						msg.Usage.OutputTokens = u.OutputTokens
+					}
+					if u.CacheCreationInputTokens > 0 {
+						msg.Usage.CacheCreationInputTokens = u.CacheCreationInputTokens
+					}
+					if u.CacheReadInputTokens > 0 {
+						msg.Usage.CacheReadInputTokens = u.CacheReadInputTokens
+					}
+				}
+			}
 		}
 	}
 	// Materialise content blocks. We round-trip through JSON because the
 	// SDK's ContentBlockUnion is not externally constructable.
-	if len(blockTypes) > 0 {
-		pieces := make([]map[string]any, 0, len(blockTypes))
-		for i, t := range blockTypes {
+	if len(blockStarts) > 0 {
+		pieces := make([]map[string]any, 0, len(blockStarts))
+		for i, cb := range blockStarts {
+			t, _ := cb["type"].(string)
 			switch t {
-			case "text", "":
+			case "", "text":
 				pieces = append(pieces, map[string]any{"type": "text", "text": blockTexts[i]})
 			case "thinking":
-				pieces = append(pieces, map[string]any{"type": "thinking", "thinking": blockTexts[i]})
+				piece := map[string]any{"type": "thinking", "thinking": blockTexts[i]}
+				if sig, ok := cb["signature"].(string); ok && sig != "" {
+					piece["signature"] = sig
+				}
+				pieces = append(pieces, piece)
+			case "tool_use":
+				piece := map[string]any{"type": "tool_use"}
+				if id, ok := cb["id"].(string); ok {
+					piece["id"] = id
+				}
+				if name, ok := cb["name"].(string); ok {
+					piece["name"] = name
+				}
+				// Prefer the accumulated partial_json if any frames arrived;
+				// otherwise honour any input that came on content_block_start.
+				if blockToolInputJSON[i] != "" {
+					var inp any
+					if err := json.Unmarshal([]byte(blockToolInputJSON[i]), &inp); err == nil {
+						piece["input"] = inp
+					} else {
+						piece["input"] = map[string]any{}
+					}
+				} else if inp, ok := cb["input"]; ok {
+					piece["input"] = inp
+				} else {
+					piece["input"] = map[string]any{}
+				}
+				pieces = append(pieces, piece)
 			default:
-				pieces = append(pieces, map[string]any{"type": t})
+				// Pass through unknown block types verbatim.
+				pieces = append(pieces, cb)
 			}
 		}
 		data, _ := json.Marshal(pieces)
