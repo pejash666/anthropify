@@ -3,6 +3,8 @@
 package e2e
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/shahao/hybridstream"
@@ -41,10 +43,15 @@ func newGeminiClient(t *testing.T) (*hybridstream.Client, string) {
 	t.Helper()
 	env := GeminiEnv()
 	if !env.Configured {
-		t.Skip("GEMINI_API_KEY (AI Studio) or VERTEX_PROJECT/VERTEX_LOCATION not set; skipping E2E")
+		t.Skip("GEMINI_API_KEY (Studio/Express) or VERTEX_PROJECT/VERTEX_LOCATION not set; skipping E2E")
+	}
+	mode, err := parseGeminiMode(env.GeminiMode)
+	if err != nil {
+		t.Fatalf("parse GEMINI_MODE: %v", err)
 	}
 	cli, err := hybridstream.New(
 		hybridstream.WithGemini(hybridstream.GeminiConfig{
+			Mode:     mode,
 			APIKey:   env.APIKey,
 			Project:  env.VertexProject,
 			Location: env.VertexLocation,
@@ -54,6 +61,26 @@ func newGeminiClient(t *testing.T) (*hybridstream.Client, string) {
 		t.Fatalf("hybridstream.New: %v", err)
 	}
 	return cli, env.Model
+}
+
+// parseGeminiMode maps a GEMINI_MODE env value to its hybridstream
+// constant. An empty string yields GeminiModeAuto so existing setups
+// behave identically to the pre-Express harness.
+func parseGeminiMode(s string) (hybridstream.GeminiMode, error) {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "":
+		return hybridstream.GeminiModeAuto, nil
+	case "auto":
+		return hybridstream.GeminiModeAuto, nil
+	case "studio":
+		return hybridstream.GeminiModeStudio, nil
+	case "express":
+		return hybridstream.GeminiModeExpress, nil
+	case "vertex":
+		return hybridstream.GeminiModeVertex, nil
+	default:
+		return 0, fmt.Errorf("unknown GEMINI_MODE %q (want auto/studio/express/vertex)", s)
+	}
 }
 
 // newChatCompletionsClient is the common path for OpenAI-compatible

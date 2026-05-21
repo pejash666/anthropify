@@ -66,6 +66,7 @@ func New(opts ...Option) (*Client, error) {
 
 	if cfg.gemini != nil {
 		a, err := geminiadapter.New(geminiadapter.Config{
+			Mode:         cfg.gemini.Mode,
 			Project:      cfg.gemini.Project,
 			Location:     cfg.gemini.Location,
 			Publisher:    cfg.gemini.Publisher,

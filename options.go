@@ -6,6 +6,21 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+
+	geminiadapter "github.com/shahao/hybridstream/adapter/gemini_native"
+)
+
+// GeminiMode re-exports the adapter-level mode enum so callers do not
+// need to import the adapter package directly.
+type GeminiMode = geminiadapter.GeminiMode
+
+// Re-exported Gemini mode constants. See adapter/gemini_native for the
+// authoritative documentation of each variant.
+const (
+	GeminiModeAuto    = geminiadapter.GeminiModeAuto
+	GeminiModeStudio  = geminiadapter.GeminiModeStudio
+	GeminiModeExpress = geminiadapter.GeminiModeExpress
+	GeminiModeVertex  = geminiadapter.GeminiModeVertex
 )
 
 // OpenAIConfig configures the OpenAI Responses adapter (GPT-5 family).
@@ -33,15 +48,21 @@ type AnthropicConfig struct {
 
 // GeminiConfig configures the Gemini Vertex streamGenerateContent adapter.
 type GeminiConfig struct {
-	// Project is the GCP project ID. Required.
+	// Mode selects between Auto (heuristic), Studio, Express, and
+	// Vertex. The zero value (Auto) preserves the legacy behaviour:
+	// project+location => Vertex, otherwise APIKey => Studio.
+	Mode GeminiMode
+	// Project is the GCP project ID. Required for Vertex mode.
 	Project string
-	// Location is the GCP region (e.g. "us-central1"). Required.
+	// Location is the GCP region (e.g. "us-central1"). Required for Vertex mode.
 	Location string
 	// Publisher defaults to "google".
 	Publisher string
-	// APIKey, when set, uses the AI Studio endpoint instead of Vertex.
+	// APIKey carries either an AI Studio key (Studio mode), a Vertex
+	// Express key such as AQ.* (Express mode), or a Bearer access
+	// token (Vertex mode).
 	APIKey string
-	// BaseURL overrides the default Vertex endpoint.
+	// BaseURL overrides the default upstream host for the resolved mode.
 	BaseURL string
 	// ExtraHeaders is merged into every request.
 	ExtraHeaders http.Header

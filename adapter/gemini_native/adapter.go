@@ -24,17 +24,54 @@ import (
 	"github.com/shahao/hybridstream/internal/ssehelper"
 )
 
+// GeminiMode selects which Google endpoint family + auth shape the
+// adapter targets. The three production modes are exposed as named
+// constants; GeminiModeAuto preserves the original heuristic so
+// existing callers do not need to touch their config.
+type GeminiMode int
+
+const (
+	// GeminiModeAuto picks a mode from the populated config fields:
+	// project+location wins (Vertex), otherwise an APIKey routes to
+	// AI Studio. Auto never selects Express; that mode must be
+	// requested explicitly to avoid breaking callers that historically
+	// used AI Studio keys against generativelanguage.googleapis.com.
+	GeminiModeAuto GeminiMode = iota
+	// GeminiModeStudio targets generativelanguage.googleapis.com with
+	// an AI Studio key passed via ?key=.
+	GeminiModeStudio
+	// GeminiModeExpress targets aiplatform.googleapis.com with the
+	// simplified /v1/publishers/google path and ?key= auth (Vertex
+	// Express Mode, used with AQ.-prefixed keys).
+	GeminiModeExpress
+	// GeminiModeVertex targets aiplatform.googleapis.com with the
+	// full /v1/projects/.../locations/... path and Bearer auth.
+	GeminiModeVertex
+)
+
+const (
+	defaultVertexBaseURL  = "https://aiplatform.googleapis.com"
+	defaultStudioBaseURL  = "https://generativelanguage.googleapis.com"
+	defaultExpressBaseURL = "https://aiplatform.googleapis.com"
+)
+
 // Config captures the subset of GeminiConfig that the adapter consumes.
 //
-// Two upstream modes are supported:
+// Three upstream modes are supported, selected by Mode:
 //
-//  1. Vertex AI: set Project, Location, and APIKey (which is treated
-//     as a bearer access token, e.g. produced by `gcloud auth
+//  1. Vertex AI (GeminiModeVertex): Project + Location + APIKey
+//     (treated as a Bearer access token, e.g. `gcloud auth
 //     print-access-token`). Publisher defaults to "google".
-//  2. AI Studio: set BaseURL=https://generativelanguage.googleapis.com
-//     and APIKey to your AI Studio key. Project/Location are ignored.
-//     The key is appended as ?key=... per Google's public API rules.
+//  2. AI Studio (GeminiModeStudio): APIKey only, sent as ?key=
+//     against generativelanguage.googleapis.com.
+//  3. Vertex Express (GeminiModeExpress): APIKey only (typically
+//     AQ.-prefixed), sent as ?key= against aiplatform.googleapis.com
+//     using the simplified /v1/publishers/google path.
+//
+// GeminiModeAuto (the zero value) keeps the legacy heuristic:
+// project+location => Vertex, else APIKey => Studio.
 type Config struct {
+	Mode         GeminiMode
 	Project      string
 	Location     string
 	Publisher    string
@@ -47,26 +84,75 @@ type Config struct {
 // Adapter drives the Gemini streamGenerateContent endpoint and rewrites
 // its SSE stream as Anthropic events.
 type Adapter struct {
-	cfg Config
+	cfg      Config
+	resolved GeminiMode // post-resolution; never GeminiModeAuto
 }
 
 // New validates cfg and returns a ready-to-use Adapter.
 func New(cfg Config) (*Adapter, error) {
-	if cfg.APIKey == "" && (cfg.Project == "" || cfg.Location == "") {
-		return nil, errors.New("hybridstream/gemini_native: either APIKey or (Project + Location) must be set")
-	}
 	if cfg.Publisher == "" {
 		cfg.Publisher = "google"
-	}
-	if cfg.BaseURL == "" {
-		// Default to Vertex AI; AI-Studio callers must set it
-		// explicitly.
-		cfg.BaseURL = "https://aiplatform.googleapis.com"
 	}
 	if cfg.HTTPClient == nil {
 		cfg.HTTPClient = http.DefaultClient
 	}
-	return &Adapter{cfg: cfg}, nil
+
+	resolved, err := resolveMode(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	if cfg.BaseURL == "" {
+		cfg.BaseURL = defaultBaseURL(resolved)
+	}
+
+	return &Adapter{cfg: cfg, resolved: resolved}, nil
+}
+
+// resolveMode collapses Auto into a concrete mode and validates that
+// the requested mode has the fields it needs.
+func resolveMode(cfg Config) (GeminiMode, error) {
+	switch cfg.Mode {
+	case GeminiModeAuto:
+		if cfg.Project != "" && cfg.Location != "" {
+			return GeminiModeVertex, nil
+		}
+		if cfg.APIKey != "" {
+			return GeminiModeStudio, nil
+		}
+		return 0, errors.New("hybridstream/gemini_native: either APIKey or (Project + Location) must be set")
+	case GeminiModeStudio:
+		if cfg.APIKey == "" {
+			return 0, errors.New("hybridstream/gemini_native: Studio mode requires APIKey")
+		}
+		return GeminiModeStudio, nil
+	case GeminiModeExpress:
+		if cfg.APIKey == "" {
+			return 0, errors.New("hybridstream/gemini_native: Express mode requires APIKey")
+		}
+		return GeminiModeExpress, nil
+	case GeminiModeVertex:
+		if cfg.Project == "" || cfg.Location == "" {
+			return 0, errors.New("hybridstream/gemini_native: Vertex mode requires Project and Location")
+		}
+		if cfg.APIKey == "" {
+			return 0, errors.New("hybridstream/gemini_native: Vertex mode requires APIKey (Bearer access token)")
+		}
+		return GeminiModeVertex, nil
+	default:
+		return 0, fmt.Errorf("hybridstream/gemini_native: unknown Mode %d", cfg.Mode)
+	}
+}
+
+func defaultBaseURL(mode GeminiMode) string {
+	switch mode {
+	case GeminiModeStudio:
+		return defaultStudioBaseURL
+	case GeminiModeExpress:
+		return defaultExpressBaseURL
+	default:
+		return defaultVertexBaseURL
+	}
 }
 
 // Name satisfies adapter.Adapter.
@@ -91,7 +177,7 @@ func (a *Adapter) Stream(ctx context.Context, req anthropicsdk.MessageNewParams)
 		return nil, err
 	}
 
-	endpoint, useBearer := a.buildEndpoint(model)
+	endpoint, useBearer := a.buildEndpoint(model, true)
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(payload))
 	if err != nil {
 		return nil, err
@@ -150,29 +236,55 @@ func (a *Adapter) Stream(ctx context.Context, req anthropicsdk.MessageNewParams)
 
 // buildEndpoint returns the fully-qualified upstream URL plus a flag
 // indicating whether to send the API key as a Bearer header (Vertex
-// mode) or as a `key=` query string (AI Studio mode).
+// mode) or as a `key=` query string (Studio / Express modes).
 //
-// Heuristic: if Project and Location are both set we use the Vertex
-// path; otherwise we assume AI Studio.
-func (a *Adapter) buildEndpoint(model string) (string, bool) {
+// The stream flag toggles between :streamGenerateContent (with
+// alt=sse) and :generateContent. The non-stream branch is provided
+// for forward-compatibility with a future Invoke implementation; the
+// current Stream-only flow always passes stream=true.
+func (a *Adapter) buildEndpoint(model string, stream bool) (string, bool) {
 	base := strings.TrimRight(a.cfg.BaseURL, "/")
-	if a.cfg.Project != "" && a.cfg.Location != "" {
-		// Vertex AI form (matches the reference at
-		// service/llm/converter.go:2785).
+	action := ":generateContent"
+	if stream {
+		action = ":streamGenerateContent"
+	}
+
+	switch a.resolved {
+	case GeminiModeVertex:
 		path := fmt.Sprintf(
-			"%s/v1/projects/%s/locations/%s/publishers/%s/models/%s:streamGenerateContent",
-			base, a.cfg.Project, a.cfg.Location, a.cfg.Publisher, model,
+			"%s/v1/projects/%s/locations/%s/publishers/%s/models/%s%s",
+			base, a.cfg.Project, a.cfg.Location, a.cfg.Publisher, model, action,
 		)
-		return path + "?alt=sse", true
-	}
-	// AI Studio form: /v1beta/models/{model}:streamGenerateContent?alt=sse&key=...
-	path := fmt.Sprintf("%s/v1beta/models/%s:streamGenerateContent", base, model)
-	q := url.Values{}
-	q.Set("alt", "sse")
-	if a.cfg.APIKey != "" {
+		if stream {
+			return path + "?alt=sse", true
+		}
+		return path, true
+
+	case GeminiModeExpress:
+		path := fmt.Sprintf(
+			"%s/v1/publishers/%s/models/%s%s",
+			base, a.cfg.Publisher, model, action,
+		)
+		q := url.Values{}
+		if stream {
+			q.Set("alt", "sse")
+		}
 		q.Set("key", a.cfg.APIKey)
+		return path + "?" + q.Encode(), false
+
+	case GeminiModeStudio:
+		fallthrough
+	default:
+		path := fmt.Sprintf("%s/v1beta/models/%s%s", base, model, action)
+		q := url.Values{}
+		if stream {
+			q.Set("alt", "sse")
+		}
+		if a.cfg.APIKey != "" {
+			q.Set("key", a.cfg.APIKey)
+		}
+		return path + "?" + q.Encode(), false
 	}
-	return path + "?" + q.Encode(), false
 }
 
 // errUnsupported mirrors the parent package's sentinel; we duplicate it

@@ -44,6 +44,10 @@ type ProviderEnv struct {
 	// GEMINI_API_KEY is unset.
 	VertexProject  string
 	VertexLocation string
+	// GeminiMode, when non-empty, selects the Gemini adapter mode
+	// (one of "studio", "express", "vertex"; case-insensitive). An
+	// empty string preserves the adapter's auto-detect heuristic.
+	GeminiMode string
 }
 
 // AnthropicEnv reads ANTHROPIC_API_KEY + ANTHROPIC_MODEL.
@@ -66,10 +70,11 @@ func OpenAIEnv() ProviderEnv {
 	}
 }
 
-// GeminiEnv accepts either GEMINI_API_KEY (AI Studio) or the
-// VERTEX_PROJECT/VERTEX_LOCATION pair (Vertex AI). Vertex auth still
-// requires application-default credentials at runtime; the harness
-// itself only forwards the values to the adapter.
+// GeminiEnv accepts either GEMINI_API_KEY (Studio or Express,
+// disambiguated by GEMINI_MODE) or the VERTEX_PROJECT/VERTEX_LOCATION
+// pair (Vertex AI). Vertex auth still requires application-default
+// credentials at runtime; the harness itself only forwards the values
+// to the adapter.
 func GeminiEnv() ProviderEnv {
 	key := os.Getenv("GEMINI_API_KEY")
 	proj := os.Getenv("VERTEX_PROJECT")
@@ -81,6 +86,7 @@ func GeminiEnv() ProviderEnv {
 		Model:          envOr("GEMINI_MODEL", "gemini-2.5-flash"),
 		VertexProject:  proj,
 		VertexLocation: loc,
+		GeminiMode:     os.Getenv("GEMINI_MODE"),
 	}
 }
 
