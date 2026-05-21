@@ -57,11 +57,14 @@ func TestE2E_OpenAI_ToolUseMultiRound(t *testing.T) {
 
 // TestE2E_OpenAI_NonStreaming exercises CreateMessage. OpenAI Responses
 // has no native non-streaming endpoint, so the top-level client drains
-// Stream and assembles the message via assembleFromStream.
+// Stream and assembles the message via assembleFromStream. Uses 1024
+// max_tokens because reasoning models (gpt-5-mini etc.) burn most of
+// their budget on internal reasoning tokens before emitting any text;
+// 128 tokens leaves no room for visible output.
 func TestE2E_OpenAI_NonStreaming(t *testing.T) {
 	cli, model := newOpenAIClient(t)
 	msg, err := cli.CreateMessage(context.Background(),
-		helpers.BasicTextPrompt(model, 128))
+		helpers.BasicTextPrompt(model, 1024))
 	if err != nil {
 		t.Fatalf("CreateMessage: %v", err)
 	}
