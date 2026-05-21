@@ -33,8 +33,19 @@ func TestE2E_Matrix_Consistency(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			cli, model := tc.build(t) // build calls t.Skip when unconfigured
+			// 1024 tokens of headroom: reasoning-capable models
+			// (e.g. gpt-5-mini via OpenAI Responses) easily burn
+			// the entire budget on hidden reasoning when given a
+			// short prompt, leaving zero tokens for visible text.
+			// A direct curl probe against gpt-5-mini with
+			// max_output_tokens=128 and this prompt confirmed the
+			// upstream emits only `response.output_item.added`
+			// (reasoning) + `response.incomplete` with
+			// reason=max_output_tokens and NO output_text deltas,
+			// so the converter produces no content blocks. 1024
+			// matches the per-provider BasicStream budget.
 			stream, err := cli.CreateMessageStream(context.Background(),
-				helpers.BasicTextPrompt(model, 128))
+				helpers.BasicTextPrompt(model, 1024))
 			if err != nil {
 				t.Fatalf("CreateMessageStream: %v", err)
 			}
