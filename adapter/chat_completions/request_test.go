@@ -416,7 +416,7 @@ func TestBuildRequest_DeepSeekV32CanonicalPassthrough(t *testing.T) {
 }
 
 // TestBuildRequest_DeepSeekV32AliasPassthrough verifies that the
-// hybridstream-extended aliases ("deepseek-v3.2" and "deepseek-v3-2")
+// anthropify-extended aliases ("deepseek-v3.2" and "deepseek-v3-2")
 // also trigger the passthrough branch. This keeps the legacy callers
 // working alongside the SoT canonical name.
 func TestBuildRequest_DeepSeekV32AliasPassthrough(t *testing.T) {

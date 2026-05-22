@@ -1,4 +1,4 @@
-package hybridstream
+package anthropify
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"strings"
 
-	geminiadapter "github.com/shahao/hybridstream/adapter/gemini_native"
+	geminiadapter "github.com/shahao/anthropify/adapter/gemini_native"
 )
 
 // GeminiMode re-exports the adapter-level mode enum so callers do not
@@ -200,7 +200,7 @@ func newNopLogger() *slog.Logger {
 // contextKey avoids accidental collisions with caller-owned keys.
 type contextKey struct{ name string }
 
-func (k contextKey) String() string { return "hybridstream:" + k.name }
+func (k contextKey) String() string { return "anthropify:" + k.name }
 
 var ctxKeyLogger = contextKey{name: "logger"}
 

@@ -17,9 +17,9 @@ import (
 // whether to fall back to draining Stream and assembling a Message.
 //
 // It lives in this neutral package so every adapter and the top-level
-// hybridstream package can share the same value without introducing an
+// anthropify package can share the same value without introducing an
 // import cycle (the parent imports adapter, never the other way round).
-var ErrUnsupported = errors.New("hybridstream: feature not yet supported")
+var ErrUnsupported = errors.New("anthropify: feature not yet supported")
 
 // RawEvent is a single Anthropic-shaped SSE payload. Producers emit bytes
 // to avoid forcing every adapter to construct the SDK's union types.

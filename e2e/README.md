@@ -45,7 +45,7 @@ go test -tags=e2e ./e2e/... -run TestE2E_Matrix_Consistency -v
 ```
 e2e/
 ├── env.go                     // env-var loaders + skip helper
-├── clients.go                 // per-provider hybridstream.Client builders
+├── clients.go                 // per-provider anthropify.Client builders
 ├── matrix_test.go             // cross-provider consistency test
 ├── anthropic_test.go
 ├── openai_responses_test.go

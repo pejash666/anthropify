@@ -9,7 +9,7 @@
 // is intended to match that reference; differences are limited to:
 //
 //   - tool_use ids are generated with crypto/rand instead of google/uuid
-//     to avoid pulling a third-party dependency into hybridstream;
+//     to avoid pulling a third-party dependency into anthropify;
 //   - log lines are dropped; non-fatal parse problems are silently
 //     ignored, matching the openai_responses converter style;
 //   - retry_prompt / stop_msg fields (which the proxy adds for its own
@@ -371,7 +371,7 @@ func (c *Converter) createMessageDelta() string {
 	}
 	// Per Anthropic streaming spec, message_delta.usage carries the
 	// final cumulative usage (input_tokens, output_tokens, cache_*).
-	// The Anthropic SDK and the hybridstream harness only surface
+	// The Anthropic SDK and the anthropify harness only surface
 	// usage from message_start / message_delta, so omitting it here
 	// would surface as InputTokens=0 / OutputTokens=0 on the client
 	// even when Gemini reported non-zero counts in its usageMetadata.

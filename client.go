@@ -1,4 +1,4 @@
-package hybridstream
+package anthropify
 
 import (
 	"context"
@@ -8,11 +8,11 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 
-	"github.com/shahao/hybridstream/adapter"
-	anthropicadapter "github.com/shahao/hybridstream/adapter/anthropic"
-	chatadapter "github.com/shahao/hybridstream/adapter/chat_completions"
-	geminiadapter "github.com/shahao/hybridstream/adapter/gemini_native"
-	openairesponses "github.com/shahao/hybridstream/adapter/openai_responses"
+	"github.com/shahao/anthropify/adapter"
+	anthropicadapter "github.com/shahao/anthropify/adapter/anthropic"
+	chatadapter "github.com/shahao/anthropify/adapter/chat_completions"
+	geminiadapter "github.com/shahao/anthropify/adapter/gemini_native"
+	openairesponses "github.com/shahao/anthropify/adapter/openai_responses"
 )
 
 // Client is the top-level entry point. Construct one with New.
@@ -44,7 +44,7 @@ func New(opts ...Option) (*Client, error) {
 			HTTPClient:   cfg.httpClient,
 		})
 		if err != nil {
-			return nil, fmt.Errorf("hybridstream: anthropic adapter: %w", err)
+			return nil, fmt.Errorf("anthropify: anthropic adapter: %w", err)
 		}
 		cli.anthropic = a
 	}
@@ -59,7 +59,7 @@ func New(opts ...Option) (*Client, error) {
 			HTTPClient:   cfg.httpClient,
 		})
 		if err != nil {
-			return nil, fmt.Errorf("hybridstream: openai_responses adapter: %w", err)
+			return nil, fmt.Errorf("anthropify: openai_responses adapter: %w", err)
 		}
 		cli.openai = a
 	}
@@ -76,7 +76,7 @@ func New(opts ...Option) (*Client, error) {
 			HTTPClient:   cfg.httpClient,
 		})
 		if err != nil {
-			return nil, fmt.Errorf("hybridstream: gemini_native adapter: %w", err)
+			return nil, fmt.Errorf("anthropify: gemini_native adapter: %w", err)
 		}
 		cli.gemini = a
 	}
@@ -90,7 +90,7 @@ func New(opts ...Option) (*Client, error) {
 			HTTPClient:   cfg.httpClient,
 		})
 		if err != nil {
-			return nil, fmt.Errorf("hybridstream: chat_completions[%s] adapter: %w", name, err)
+			return nil, fmt.Errorf("anthropify: chat_completions[%s] adapter: %w", name, err)
 		}
 		cli.chats[name] = a
 	}

@@ -1,4 +1,4 @@
-module github.com/shahao/hybridstream
+module github.com/shahao/anthropify
 
 go 1.24.3
 

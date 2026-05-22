@@ -16,8 +16,8 @@ import (
 
 	anthropicsdk "github.com/anthropics/anthropic-sdk-go"
 
-	"github.com/shahao/hybridstream/adapter"
-	"github.com/shahao/hybridstream/internal/ssehelper"
+	"github.com/shahao/anthropify/adapter"
+	"github.com/shahao/anthropify/internal/ssehelper"
 )
 
 // Config captures the subset of AnthropicConfig that the adapter cares
@@ -38,7 +38,7 @@ type Adapter struct {
 // New constructs an Adapter and validates required fields.
 func New(cfg Config) (*Adapter, error) {
 	if cfg.APIKey == "" {
-		return nil, errors.New("hybridstream/anthropic: APIKey is required")
+		return nil, errors.New("anthropify/anthropic: APIKey is required")
 	}
 	if cfg.BaseURL == "" {
 		cfg.BaseURL = "https://api.anthropic.com"
@@ -76,11 +76,11 @@ func (a *Adapter) Invoke(ctx context.Context, req anthropicsdk.MessageNewParams)
 		return nil, err
 	}
 	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("hybridstream/anthropic: upstream status %d: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("anthropify/anthropic: upstream status %d: %s", resp.StatusCode, string(body))
 	}
 	var msg anthropicsdk.Message
 	if err := json.Unmarshal(body, &msg); err != nil {
-		return nil, fmt.Errorf("hybridstream/anthropic: decode response: %w", err)
+		return nil, fmt.Errorf("anthropify/anthropic: decode response: %w", err)
 	}
 	return &msg, nil
 }
@@ -103,7 +103,7 @@ func (a *Adapter) Stream(ctx context.Context, req anthropicsdk.MessageNewParams)
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
-		return nil, fmt.Errorf("hybridstream/anthropic: upstream status %d: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("anthropify/anthropic: upstream status %d: %s", resp.StatusCode, string(body))
 	}
 
 	ch := make(chan adapter.RawEvent, 16)
@@ -155,7 +155,7 @@ func (a *Adapter) newHTTPRequest(ctx context.Context, payload []byte, stream boo
 func buildPayload(req anthropicsdk.MessageNewParams, stream bool) ([]byte, error) {
 	raw, err := json.Marshal(req)
 	if err != nil {
-		return nil, fmt.Errorf("hybridstream/anthropic: marshal request: %w", err)
+		return nil, fmt.Errorf("anthropify/anthropic: marshal request: %w", err)
 	}
 	var m map[string]any
 	if err := json.Unmarshal(raw, &m); err != nil {

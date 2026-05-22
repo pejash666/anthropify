@@ -1,4 +1,4 @@
-package hybridstream
+package anthropify
 
 import (
 	"context"
@@ -9,10 +9,10 @@ import (
 
 	anthropicsdk "github.com/anthropics/anthropic-sdk-go"
 
-	"github.com/shahao/hybridstream/adapter"
-	chatadapter "github.com/shahao/hybridstream/adapter/chat_completions"
-	geminiadapter "github.com/shahao/hybridstream/adapter/gemini_native"
-	openairesponses "github.com/shahao/hybridstream/adapter/openai_responses"
+	"github.com/shahao/anthropify/adapter"
+	chatadapter "github.com/shahao/anthropify/adapter/chat_completions"
+	geminiadapter "github.com/shahao/anthropify/adapter/gemini_native"
+	openairesponses "github.com/shahao/anthropify/adapter/openai_responses"
 )
 
 // mockAdapter is a hand-rolled adapter.Adapter that returns
@@ -298,7 +298,7 @@ func TestErrUnsupported_Aliased(t *testing.T) {
 	}
 	for _, tc := range cases {
 		if !errors.Is(tc.err, ErrUnsupported) {
-			t.Errorf("%s: errors.Is(_, hybridstream.ErrUnsupported) = false", tc.name)
+			t.Errorf("%s: errors.Is(_, anthropify.ErrUnsupported) = false", tc.name)
 		}
 	}
 }

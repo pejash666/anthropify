@@ -1,8 +1,8 @@
-// Package hybridstream provides a unified Anthropic-protocol facade over
+// Package anthropify provides a unified Anthropic-protocol facade over
 // multiple LLM providers. All public request and response types are aliases
 // to github.com/anthropics/anthropic-sdk-go so callers need only learn the
 // Anthropic Messages API.
-package hybridstream
+package anthropify
 
 import (
 	"encoding/json"
@@ -10,7 +10,7 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 
-	"github.com/shahao/hybridstream/adapter"
+	"github.com/shahao/anthropify/adapter"
 )
 
 // ProviderKind identifies one of the supported backends.
@@ -44,13 +44,13 @@ type MessageStreamEventUnion = anthropic.MessageStreamEventUnion
 var (
 	// ErrProviderNotConfigured is returned when routing selects a provider
 	// that was never registered via the functional options.
-	ErrProviderNotConfigured = errors.New("hybridstream: provider not configured")
+	ErrProviderNotConfigured = errors.New("anthropify: provider not configured")
 	// ErrUnknownModel is returned when no route rule matches the request
 	// model and no override is installed.
-	ErrUnknownModel = errors.New("hybridstream: unable to route model")
+	ErrUnknownModel = errors.New("anthropify: unable to route model")
 	// ErrStreamClosed is returned by StreamReader when the upstream stream
 	// has been fully consumed.
-	ErrStreamClosed = errors.New("hybridstream: stream closed")
+	ErrStreamClosed = errors.New("anthropify: stream closed")
 	// ErrUnsupported is returned by adapters that lack a native
 	// non-streaming endpoint. The top-level Client uses errors.Is to
 	// detect this sentinel and falls back to draining Stream. It is an

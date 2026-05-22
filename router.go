@@ -1,4 +1,4 @@
-package hybridstream
+package anthropify
 
 import (
 	"fmt"

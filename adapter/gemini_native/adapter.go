@@ -1,4 +1,4 @@
-// Package gemini_native implements the hybridstream adapter for
+// Package gemini_native implements the anthropify adapter for
 // Google's Vertex AI / AI Studio streamGenerateContent JSON+SSE API,
 // translating its events into the Anthropic Messages event stream.
 //
@@ -20,8 +20,8 @@ import (
 
 	anthropicsdk "github.com/anthropics/anthropic-sdk-go"
 
-	"github.com/shahao/hybridstream/adapter"
-	"github.com/shahao/hybridstream/internal/ssehelper"
+	"github.com/shahao/anthropify/adapter"
+	"github.com/shahao/anthropify/internal/ssehelper"
 )
 
 // GeminiMode selects which Google endpoint family + auth shape the
@@ -120,27 +120,27 @@ func resolveMode(cfg Config) (GeminiMode, error) {
 		if cfg.APIKey != "" {
 			return GeminiModeStudio, nil
 		}
-		return 0, errors.New("hybridstream/gemini_native: either APIKey or (Project + Location) must be set")
+		return 0, errors.New("anthropify/gemini_native: either APIKey or (Project + Location) must be set")
 	case GeminiModeStudio:
 		if cfg.APIKey == "" {
-			return 0, errors.New("hybridstream/gemini_native: Studio mode requires APIKey")
+			return 0, errors.New("anthropify/gemini_native: Studio mode requires APIKey")
 		}
 		return GeminiModeStudio, nil
 	case GeminiModeExpress:
 		if cfg.APIKey == "" {
-			return 0, errors.New("hybridstream/gemini_native: Express mode requires APIKey")
+			return 0, errors.New("anthropify/gemini_native: Express mode requires APIKey")
 		}
 		return GeminiModeExpress, nil
 	case GeminiModeVertex:
 		if cfg.Project == "" || cfg.Location == "" {
-			return 0, errors.New("hybridstream/gemini_native: Vertex mode requires Project and Location")
+			return 0, errors.New("anthropify/gemini_native: Vertex mode requires Project and Location")
 		}
 		if cfg.APIKey == "" {
-			return 0, errors.New("hybridstream/gemini_native: Vertex mode requires APIKey (Bearer access token)")
+			return 0, errors.New("anthropify/gemini_native: Vertex mode requires APIKey (Bearer access token)")
 		}
 		return GeminiModeVertex, nil
 	default:
-		return 0, fmt.Errorf("hybridstream/gemini_native: unknown Mode %d", cfg.Mode)
+		return 0, fmt.Errorf("anthropify/gemini_native: unknown Mode %d", cfg.Mode)
 	}
 }
 
@@ -169,7 +169,7 @@ func (a *Adapter) Invoke(_ context.Context, _ anthropicsdk.MessageNewParams) (*a
 func (a *Adapter) Stream(ctx context.Context, req anthropicsdk.MessageNewParams) (<-chan adapter.RawEvent, error) {
 	model := string(req.Model)
 	if model == "" {
-		return nil, errors.New("hybridstream/gemini_native: model is required")
+		return nil, errors.New("anthropify/gemini_native: model is required")
 	}
 
 	payload, err := BuildRequest(req)
@@ -200,7 +200,7 @@ func (a *Adapter) Stream(ctx context.Context, req anthropicsdk.MessageNewParams)
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
-		return nil, fmt.Errorf("hybridstream/gemini_native: upstream status %d: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("anthropify/gemini_native: upstream status %d: %s", resp.StatusCode, string(body))
 	}
 
 	ch := make(chan adapter.RawEvent, 16)

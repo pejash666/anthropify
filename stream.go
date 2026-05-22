@@ -1,9 +1,9 @@
-package hybridstream
+package anthropify
 
 import (
 	"encoding/json"
 
-	"github.com/shahao/hybridstream/adapter"
+	"github.com/shahao/anthropify/adapter"
 )
 
 // StreamReader is a pull-style iterator over Anthropic-shaped streaming

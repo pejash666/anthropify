@@ -266,7 +266,7 @@ func TestConverter_Refusal(t *testing.T) {
 // protocol-correct location per Anthropic's streaming spec) and that
 // promptTokenCount has cached subtracted out. message_stop is also
 // allowed to carry the same usage block for backwards compatibility,
-// but the canonical reader (and the hybridstream e2e harness) only
+// but the canonical reader (and the anthropify e2e harness) only
 // looks at message_start / message_delta.
 func TestConverter_UsageMapping(t *testing.T) {
 	input := `

@@ -11,8 +11,8 @@ import (
 
 	anthropicsdk "github.com/anthropics/anthropic-sdk-go"
 
-	"github.com/shahao/hybridstream/adapter"
-	"github.com/shahao/hybridstream/internal/ssehelper"
+	"github.com/shahao/anthropify/adapter"
+	"github.com/shahao/anthropify/internal/ssehelper"
 )
 
 // Config is the subset of OpenAIConfig this adapter consumes.
@@ -34,7 +34,7 @@ type Adapter struct {
 // New validates cfg and returns a ready-to-use Adapter.
 func New(cfg Config) (*Adapter, error) {
 	if cfg.APIKey == "" {
-		return nil, errors.New("hybridstream/openai_responses: APIKey is required")
+		return nil, errors.New("anthropify/openai_responses: APIKey is required")
 	}
 	if cfg.BaseURL == "" {
 		cfg.BaseURL = "https://api.openai.com"
@@ -88,7 +88,7 @@ func (a *Adapter) Stream(ctx context.Context, req anthropicsdk.MessageNewParams)
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
-		return nil, fmt.Errorf("hybridstream/openai_responses: upstream status %d: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("anthropify/openai_responses: upstream status %d: %s", resp.StatusCode, string(body))
 	}
 
 	ch := make(chan adapter.RawEvent, 16)

@@ -26,12 +26,12 @@ import (
 func BuildRequest(req anthropicsdk.MessageNewParams) ([]byte, error) {
 	raw, err := json.Marshal(req)
 	if err != nil {
-		return nil, fmt.Errorf("hybridstream/gemini_native: marshal request: %w", err)
+		return nil, fmt.Errorf("anthropify/gemini_native: marshal request: %w", err)
 	}
 
 	var anth map[string]any
 	if err := json.Unmarshal(raw, &anth); err != nil {
-		return nil, fmt.Errorf("hybridstream/gemini_native: unmarshal request: %w", err)
+		return nil, fmt.Errorf("anthropify/gemini_native: unmarshal request: %w", err)
 	}
 
 	out := map[string]any{}

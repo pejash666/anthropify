@@ -20,7 +20,7 @@ import (
 //  1. The proxy logs through zap on several branches; those calls are
 //     dropped, only the behaviour they observe is preserved.
 //  2. Self-deployed-model lookups (GetSelfDeployedModelsConfigService)
-//     are dropped: hybridstream does not have a model registry, so the
+//     are dropped: anthropify does not have a model registry, so the
 //     decision to emit reasoning_content is made strictly on the model
 //     string passed in.
 //
@@ -32,11 +32,11 @@ func BuildRequest(req anthropicsdk.MessageNewParams, stream bool) ([]byte, error
 	// types are not introspectable enough to walk directly.
 	raw, err := json.Marshal(req)
 	if err != nil {
-		return nil, fmt.Errorf("hybridstream/chat_completions: marshal MessageNewParams: %w", err)
+		return nil, fmt.Errorf("anthropify/chat_completions: marshal MessageNewParams: %w", err)
 	}
 	var anth map[string]any
 	if err := json.Unmarshal(raw, &anth); err != nil {
-		return nil, fmt.Errorf("hybridstream/chat_completions: unmarshal MessageNewParams: %w", err)
+		return nil, fmt.Errorf("anthropify/chat_completions: unmarshal MessageNewParams: %w", err)
 	}
 
 	out := map[string]any{}
@@ -191,11 +191,11 @@ func convertSystemContent(sys any) any {
 // "no temperature override" + "reasoning_content required with tool_calls" rules.
 //
 // Mirrors service/llm/converter.go:445. We hard-code the model
-// identifiers because hybridstream has no shared constants package.
+// identifiers because anthropify has no shared constants package.
 //
 // SoT canonical names (library/constants/llm.go: KimiK25, KimiK26) only
 // use the dot form ("kimi-k2.5", "kimi-k2.6"). The hyphenated aliases
-// ("kimi-k2-5", "kimi-k2-6") are a hybridstream extension to tolerate
+// ("kimi-k2-5", "kimi-k2-6") are a anthropify extension to tolerate
 // callers that normalise dots to hyphens; do not remove them without
 // auditing downstream callers.
 func isKimiK2Family(model string) bool {
@@ -212,7 +212,7 @@ func isKimiK2Family(model string) bool {
 //
 // SoT canonical names (library/constants/llm.go) only use the dot form
 // for GLM ("glm-4.6", "glm-4.7", "glm-5.1"). The hyphenated GLM aliases
-// ("glm-4-6", "glm-4-7", "glm-5-1") are a hybridstream extension and
+// ("glm-4-6", "glm-4-7", "glm-5-1") are a anthropify extension and
 // are kept on purpose to tolerate hyphen-normalised model names.
 func isReasoningModel(model string) bool {
 	ml := strings.ToLower(model)
@@ -235,7 +235,7 @@ func isReasoningModel(model string) bool {
 //
 // SoT canonical name for V3.2 (library/constants/llm.go:DeepSeekV32) is
 // "deepseek/deepseek-v3.2" - the slash form. The bare "deepseek-v3.2"
-// and "deepseek-v3-2" aliases are hybridstream extensions covering
+// and "deepseek-v3-2" aliases are anthropify extensions covering
 // callers that strip the provider prefix or normalise the dot.
 func isDeepSeekPassthrough(model string) bool {
 	ml := strings.ToLower(model)

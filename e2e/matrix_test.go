@@ -6,8 +6,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/shahao/hybridstream"
-	"github.com/shahao/hybridstream/e2e/helpers"
+	"github.com/shahao/anthropify"
+	"github.com/shahao/anthropify/e2e/helpers"
 )
 
 // TestE2E_Matrix_Consistency runs the same BasicTextPrompt against
@@ -19,7 +19,7 @@ import (
 func TestE2E_Matrix_Consistency(t *testing.T) {
 	type providerCase struct {
 		name  string
-		build func(*testing.T) (*hybridstream.Client, string)
+		build func(*testing.T) (*anthropify.Client, string)
 	}
 	cases := []providerCase{
 		{name: string(ProviderAnthropic), build: newAnthropicClient},

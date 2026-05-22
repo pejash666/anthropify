@@ -6,7 +6,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/shahao/hybridstream/e2e/helpers"
+	"github.com/shahao/anthropify/e2e/helpers"
 )
 
 // TestE2E_GLM_BasicStream is the smoke test for chat_completions_glm.

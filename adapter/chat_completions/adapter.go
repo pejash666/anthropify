@@ -1,4 +1,4 @@
-// Package chat_completions implements the hybridstream adapter for any
+// Package chat_completions implements the anthropify adapter for any
 // OpenAI Chat Completions compatible upstream (Kimi / DeepSeek / Qwen /
 // GLM / OpenRouter / etc.), translating its SSE stream into the
 // Anthropic Messages event stream.
@@ -26,8 +26,8 @@ import (
 
 	anthropicsdk "github.com/anthropics/anthropic-sdk-go"
 
-	"github.com/shahao/hybridstream/adapter"
-	"github.com/shahao/hybridstream/internal/ssehelper"
+	"github.com/shahao/anthropify/adapter"
+	"github.com/shahao/anthropify/internal/ssehelper"
 )
 
 // Config captures the per-backend OpenAI-compatible settings consumed
@@ -65,7 +65,7 @@ type Adapter struct {
 // name. The label is surfaced via Adapter.Name for diagnostic routing.
 func New(name string, cfg Config) (*Adapter, error) {
 	if cfg.BaseURL == "" {
-		return nil, errors.New("hybridstream/chat_completions: BaseURL is required")
+		return nil, errors.New("anthropify/chat_completions: BaseURL is required")
 	}
 	if cfg.HTTPClient == nil {
 		cfg.HTTPClient = http.DefaultClient
@@ -91,7 +91,7 @@ func (a *Adapter) Stream(ctx context.Context, req anthropicsdk.MessageNewParams)
 		req.Model = anthropicsdk.Model(model)
 	}
 	if model == "" {
-		return nil, errors.New("hybridstream/chat_completions: model is required")
+		return nil, errors.New("anthropify/chat_completions: model is required")
 	}
 
 	payload, err := BuildRequest(req, true)
@@ -122,7 +122,7 @@ func (a *Adapter) Stream(ctx context.Context, req anthropicsdk.MessageNewParams)
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
-		return nil, fmt.Errorf("hybridstream/chat_completions[%s]: upstream status %d: %s", a.name, resp.StatusCode, string(body))
+		return nil, fmt.Errorf("anthropify/chat_completions[%s]: upstream status %d: %s", a.name, resp.StatusCode, string(body))
 	}
 
 	ch := make(chan adapter.RawEvent, 16)
