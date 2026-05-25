@@ -404,6 +404,7 @@ have no analogous request field:
 |-------------------|--------------------------------------------------|
 | Anthropic         | emits `{"cache_control":{"type":"ephemeral"}}`   |
 | MiniMax           | same wire body via the anthropic adapter         |
+| AWS Bedrock       | forwarded verbatim; honoured per Bedrock's evolving support — anthropify does not strip |
 | OpenAI Responses  | no-op (auto-cached server-side, prompts >1024 t) |
 | Azure OpenAI      | no-op (auto-cached server-side, prompts >1024 t) |
 | Gemini Native     | no-op (Gemini 2.5+ implicit caching server-side) |

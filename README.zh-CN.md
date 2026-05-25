@@ -381,6 +381,7 @@ backend 上是有据可依的、静默 no-op —— 这些上游服务端本来�
 |-------------------|---------------------------------------------------|
 | Anthropic         | 发出 `{"cache_control":{"type":"ephemeral"}}`     |
 | MiniMax           | 同上（共用 anthropic adapter）                    |
+| AWS Bedrock       | 字段原样透传；Bedrock 后端是否生效随其支持演进 —— anthropify 不会主动剥离 |
 | OpenAI Responses  | no-op（>1024 token 时服务端自动 cache）           |
 | Azure OpenAI      | no-op（>1024 token 时服务端自动 cache）           |
 | Gemini Native     | no-op（Gemini 2.5+ 隐式 cache）                   |
