@@ -15,7 +15,7 @@
 ## 这是什么？
 
 Anthropify 是一个 Go 库，让你用 Anthropic Messages API 的形态去调用 OpenAI、
-Gemini、Kimi、GLM、DeepSeek 等多家 LLM 提供商。它在进程内完成协议转换、SSE
+Gemini、Kimi、GLM、MiniMax、DeepSeek 等多家 LLM 提供商。它在进程内完成协议转换、SSE
 流式传输、tool use、thinking 块和 `cache_control` —— 前面不需要任何代理服务。
 调用方始终只面对 `anthropic.MessageNewParams` 和
 `anthropic.MessageStreamEventUnion`。
@@ -122,7 +122,15 @@ for _, t := range turns {
 | Gemini Native     | 是    | drain-and-assemble       | 是       | 是               | 部分          |
 | Kimi (Moonshot)   | 是    | drain-and-assemble       | 是       | 是               | —             |
 | GLM (智谱)        | 是    | drain-and-assemble       | 是       | 视模型而定       | —             |
+| MiniMax           | 是    | 原生 (anthropic)         | 是       | 是               | 继承          |
 | DeepSeek          | 是    | drain-and-assemble       | 是       | 是 (V3.2)        | —             |
+
+> **MiniMax** 在 `https://api.minimax.io/anthropic/v1/messages`
+> 直接讲 Anthropic 协议，因此可以挂在与真 Claude *同一个* 进程内
+> anthropic adapter 上。两个厂商共享一份协议、一份适配器 —— 注册
+> 模式（`WithAnthropicCompat("minimax", …)` +
+> `WithModelRoute("MiniMax-", …)`）见
+> [example 07](./examples/07-anthropic-compat)。
 
 > Anthropify 推荐使用 `gemini-3.5-flash`（或任意 Gemini 3.x flash 系列）。
 > Adapter 在 `generationConfig.thinkingConfig` 中发送 `thinkingLevel`，
@@ -151,6 +159,23 @@ Kimi / GLM / DeepSeek 等 OpenAI 兼容上游通过 `WithChatCompletion(name, ..
 注册，并用
 `WithModelRoute(prefix, Route{Provider: ProviderChatCompletions, Backend: name})`
 路由。
+
+Anthropic 协议兼容的 provider（如 **MiniMax**）直接挂在与真 Claude *同一个*
+anthropic adapter 上，通过
+`WithAnthropicCompat(name, AnthropicConfig{...})` 注册，再用前缀路由：
+
+```go
+ap.WithAnthropicCompat("minimax", ap.AnthropicConfig{
+    BaseURL: "https://api.minimax.io/anthropic",
+    APIKey:  os.Getenv("MINIMAX_API_KEY"),
+})
+ap.WithModelRoute("MiniMax-", ap.Route{
+    Provider: ap.ProviderAnthropic, Backend: "minimax",
+})
+```
+
+两个 backend 共享一份 adapter 和一份路由表 —— 完整 demo 见
+[example 07](./examples/07-anthropic-compat)。
 
 ## Gemini 三种鉴权模式
 

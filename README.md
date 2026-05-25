@@ -15,10 +15,10 @@
 ## What is this?
 
 Anthropify is a Go library that lets you talk to OpenAI, Gemini, Kimi, GLM,
-DeepSeek and other LLM providers through the Anthropic Messages API shape.
-It does protocol translation, SSE streaming, tool use, thinking blocks and
-`cache_control` in-process — no proxy server in front. Callers only ever see
-`anthropic.MessageNewParams` and `anthropic.MessageStreamEventUnion`.
+MiniMax, DeepSeek and other LLM providers through the Anthropic Messages API
+shape. It does protocol translation, SSE streaming, tool use, thinking blocks
+and `cache_control` in-process — no proxy server in front. Callers only ever
+see `anthropic.MessageNewParams` and `anthropic.MessageStreamEventUnion`.
 
 ## Quick start
 
@@ -127,7 +127,16 @@ adopts it as the canonical form and normalises every provider into it.
 | Gemini Native     | yes       | drain-and-assemble     | yes      | yes               | partial       |
 | Kimi (Moonshot)   | yes       | drain-and-assemble     | yes      | yes               | —             |
 | GLM (Zhipu)       | yes       | drain-and-assemble     | yes      | model-dependent   | —             |
+| MiniMax           | yes       | native (anthropic)     | yes      | yes               | inherits      |
 | DeepSeek          | yes       | drain-and-assemble     | yes      | yes (V3.2)        | —             |
+
+> **MiniMax** speaks the Anthropic protocol natively at
+> `https://api.minimax.io/anthropic/v1/messages`, so it plugs into the
+> *same* in-process anthropic adapter as real Claude. Two vendors, one
+> protocol, one adapter — see
+> [example 07](./examples/07-anthropic-compat) for the registration
+> pattern (`WithAnthropicCompat("minimax", …)` +
+> `WithModelRoute("MiniMax-", …)`).
 
 > Anthropify recommends `gemini-3.5-flash` (or any Gemini 3.x flash
 > variant). The adapter emits `thinkingLevel` in
@@ -155,6 +164,23 @@ Routing is prefix-based on `req.Model`:
 
 Kimi / GLM / DeepSeek and other OpenAI-compatible upstreams are registered
 with `WithChatCompletion(name, ...)` and routed via `WithModelRoute(prefix, Route{Provider: ProviderChatCompletions, Backend: name})`.
+
+Anthropic-compatible providers (e.g. **MiniMax**) plug onto the *same*
+anthropic adapter as real Claude via
+`WithAnthropicCompat(name, AnthropicConfig{...})`, then route by prefix:
+
+```go
+ap.WithAnthropicCompat("minimax", ap.AnthropicConfig{
+    BaseURL: "https://api.minimax.io/anthropic",
+    APIKey:  os.Getenv("MINIMAX_API_KEY"),
+})
+ap.WithModelRoute("MiniMax-", ap.Route{
+    Provider: ap.ProviderAnthropic, Backend: "minimax",
+})
+```
+
+The two backends share one adapter and one routing table — see
+[example 07](./examples/07-anthropic-compat) for the full demo.
 
 ## Gemini provider configuration
 
