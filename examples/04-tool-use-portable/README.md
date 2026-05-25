@@ -45,7 +45,7 @@ round2 final: Right now in Beijing it's 21°C (≈70°F) and sunny....
 round1 tool_use: name=get_weather input=map[city:Beijing]
 round2 final: The weather in Beijing is currently sunny with a temperature of 21 degrees Celsius.
 
-=== Kimi (kimi-k2-thinking) ===
+=== Kimi (kimi-k2.6) ===
 round1 tool_use: name=get_weather input=map[city:Beijing]
 round2 final: The weather in Beijing right now is sunny with a temperature of 21°C.
 ```

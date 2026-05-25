@@ -37,7 +37,7 @@ func main() {
 
 	for _, t := range []thinker{
 		{label: "Anthropic", model: envOr("ANTHROPIC_MODEL", "claude-sonnet-4-5")},
-		{label: "Kimi", model: envOr("KIMI_MODEL", "kimi-k2-thinking")},
+		{label: "Kimi", model: envOr("KIMI_MODEL", "kimi-k2.6")},
 		{label: "Gemini", model: envOr("GEMINI_MODEL", "gemini-3.5-flash")},
 	} {
 		fmt.Printf("\n=== %s (%s) ===\n", t.label, t.model)

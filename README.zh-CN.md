@@ -50,7 +50,7 @@ func main() {
     }
 
     stream, err := client.CreateMessageStream(context.Background(), anthropic.MessageNewParams{
-        Model:     "kimi-k2-thinking",
+        Model:     "kimi-k2.6",
         MaxTokens: 1024,
         Messages: []anthropic.MessageParam{
             anthropic.NewUserMessage(anthropic.NewTextBlock("Hello, who are you?")),

@@ -47,13 +47,13 @@ func main() {
 		},
 		{
 			label:     "Kimi (code)",
-			model:     envOr("KIMI_MODEL", "kimi-k2-thinking"),
+			model:     envOr("KIMI_MODEL", "kimi-k2.6"),
 			question:  "Now write a tiny Python function that returns those 5 bullets as a list of strings. Code only, no comments.",
-			maxTokens: 8192, // kimi-k2-thinking spends most of its budget on thinking
+			maxTokens: 8192, // kimi-k2.6 spends most of its budget on thinking
 		},
 		{
 			label:     "GLM (translation)",
-			model:     envOr("GLM_MODEL", "glm-4.6"),
+			model:     envOr("GLM_MODEL", "glm-5.1"),
 			question:  "把上面这 5 条要点翻译成日语,保持要点编号。",
 			maxTokens: 1024,
 		},
@@ -80,7 +80,7 @@ func main() {
 			fmt.Printf("error on turn %d (%s): %v\n", i+1, t.label, err)
 			return
 		}
-		// Some thinking-heavy models (e.g. kimi-k2-thinking) can exhaust
+		// Some thinking-heavy models (e.g. kimi-k2.6) can exhaust
 		// their token budget on thinking blocks before emitting any
 		// text. Keep the conversation valid by substituting a sentinel
 		// rather than appending an empty assistant turn (which the

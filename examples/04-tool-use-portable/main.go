@@ -58,7 +58,7 @@ func main() {
 		{label: "Anthropic", model: envOr("ANTHROPIC_MODEL", "claude-sonnet-4-5")},
 		{label: "OpenAI", model: envOr("OPENAI_MODEL", "gpt-5-mini")},
 		{label: "Gemini", model: envOr("GEMINI_MODEL", "gemini-3.5-flash")},
-		{label: "Kimi", model: envOr("KIMI_MODEL", "kimi-k2-thinking")},
+		{label: "Kimi", model: envOr("KIMI_MODEL", "kimi-k2.6")},
 	}
 
 	for _, p := range providers {

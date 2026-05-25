@@ -10,7 +10,7 @@ but the event vocabulary is the same across all three.
 
 - A reasoning question is sent to three thinking-capable models:
   - `claude-sonnet-4-5` with extended thinking enabled (budget 12000).
-  - `kimi-k2-thinking` (server-side default thinking, no flag needed).
+  - `kimi-k2.6` (server-side default thinking, no flag needed).
   - `gemini-3.5-flash` with thinking enabled via the same
     canonical `Thinking` field; the adapter maps the budget to a
     `thinkingLevel` bucket on Gemini's `generationConfig`.
@@ -44,7 +44,7 @@ Required env: `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `KIMI_API_KEY`.
 [block 1 stop: text]
 totals: thinking=1696 chars, text=1391 chars
 
-=== Kimi (kimi-k2-thinking) ===
+=== Kimi (kimi-k2.6) ===
 [block 0 start: thinking]
 [block 0 stop: thinking]
 [block 1 start: text]

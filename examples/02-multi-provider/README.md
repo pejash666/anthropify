@@ -37,10 +37,10 @@ I was trained on data up through April 2024.
 --- gemini-2.5-flash ---
 My training data was last updated in early 2023.
 
---- kimi-k2-thinking ---
+--- kimi-k2.6 ---
 I was trained on data up to 2024.
 
---- glm-4.6 ---
+--- glm-5.1 ---
 I am continually learning and improving, so my model is regularly updated...
 ```
 

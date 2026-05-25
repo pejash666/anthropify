@@ -13,8 +13,8 @@ Between turns, only `req.Model` changes:
 | Turn | Provider | Model | Job |
 |------|----------|-------|-----|
 | 1 | Anthropic | `claude-sonnet-4-5` | plan a trip |
-| 2 | Kimi | `kimi-k2-thinking` | turn the plan into Python |
-| 3 | GLM | `glm-4.6` | translate to Japanese |
+| 2 | Kimi | `kimi-k2.6` | turn the plan into Python |
+| 3 | GLM | `glm-5.1` | translate to Japanese |
 | 4 | Anthropic | `claude-sonnet-4-5` | summarise everything |
 
 Because every provider speaks the Anthropic-canonical message shape, the
@@ -44,7 +44,7 @@ assistant: # 3-Day Tokyo Trip
 - Day 3: Teamlab → Odaiba → Shinjuku (Metro Government Building obs deck)
 ...
 
->>> Turn 2 -> Switching to Kimi (code) (kimi-k2-thinking)
+>>> Turn 2 -> Switching to Kimi (code) (kimi-k2.6)
 user: Now write a tiny Python function that returns those 5 bullets...
 assistant: ```python
 def tokyo_bullets():
@@ -52,7 +52,7 @@ def tokyo_bullets():
         "Day 1: Senso-ji Temple → Tokyo Skytree → Shibuya Crossing",
         ...
 
->>> Turn 3 -> Switching to GLM (translation) (glm-4.6)
+>>> Turn 3 -> Switching to GLM (translation) (glm-5.1)
 user: 把上面这 5 条要点翻译成日语,保持要点编号。
 assistant: 1. 1日目：浅草寺 → 東京スカイツリー → 渋谷スクランブル交差点
 2. 2日目：築地場外市場での朝食 → 皇居東御苑 → 原宿 → 明治神宮
@@ -70,7 +70,7 @@ which provider produced it.
 
 ## Notes
 
-- `kimi-k2-thinking` spends most of its token budget on internal
+- `kimi-k2.6` spends most of its token budget on internal
   reasoning. The example gives it 8k tokens for that turn so it has
   room left over to actually emit code.
 - If a provider returns no text (e.g. budget exhausted), the example

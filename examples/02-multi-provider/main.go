@@ -45,8 +45,8 @@ func main() {
 	for _, model := range []string{
 		envOr("ANTHROPIC_MODEL", "claude-sonnet-4-5"),
 		envOr("GEMINI_MODEL", "gemini-3.5-flash"),
-		envOr("KIMI_MODEL", "kimi-k2-thinking"),
-		envOr("GLM_MODEL", "glm-4.6"),
+		envOr("KIMI_MODEL", "kimi-k2.6"),
+		envOr("GLM_MODEL", "glm-5.1"),
 	} {
 		fmt.Printf("\n--- %s ---\n", model)
 		askOnce(client, model, question)
