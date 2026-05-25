@@ -184,6 +184,20 @@ func AssertHasToolUse(t *testing.T, s StreamSummary) string {
 	return s.ToolUseIDs[0]
 }
 
+// AssertHasThinkingBlock fails when no `thinking` content block was
+// emitted. Used by providers (Anthropic, MiniMax, …) that round-trip
+// extended-thinking through the canonical thinking block on the
+// streaming response.
+func AssertHasThinkingBlock(t *testing.T, s StreamSummary) {
+	t.Helper()
+	for _, bt := range s.BlockTypes {
+		if bt == "thinking" {
+			return
+		}
+	}
+	t.Fatalf("expected a thinking content block; got block types %v", s.BlockTypes)
+}
+
 // AssertNonStreamingMessage validates the *anthropic.Message returned by
 // client.CreateMessage. Checks that role==assistant, content is
 // non-empty, and stop_reason is set.

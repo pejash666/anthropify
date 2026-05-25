@@ -27,6 +27,7 @@ func TestE2E_Matrix_Consistency(t *testing.T) {
 		{name: string(ProviderGemini), build: newGeminiClient},
 		{name: string(ProviderKimi), build: newKimiClient},
 		{name: string(ProviderGLM), build: newGLMClient},
+		{name: string(ProviderMiniMax), build: newMiniMaxClient},
 	}
 	ran := 0
 	for _, tc := range cases {

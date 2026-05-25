@@ -92,6 +92,22 @@ func WeatherToolFollowUpPrompt(model, toolUseID string) anthropic.MessageNewPara
 	return mustParams(src)
 }
 
+// ThinkingPrompt is a moderately puzzly question that nudges
+// thinking-capable models to emit a `thinking` content block when the
+// caller sets `thinking.type = "enabled"`. Used by the MiniMax e2e to
+// prove thinking-block pass-through through the anthropic adapter.
+func ThinkingPrompt(model string, budgetTokens int64) anthropic.MessageNewParams {
+	src := `{
+		"model": "` + model + `",
+		"max_tokens": 4096,
+		"thinking": {"type": "enabled", "budget_tokens": ` + itoa(budgetTokens) + `},
+		"messages": [
+			{"role":"user","content":[{"type":"text","text":"I have two children. One is a boy born on a Tuesday. What is the probability the other is also a boy? Show your reasoning."}]}
+		]
+	}`
+	return mustParams(src)
+}
+
 func itoa(n int64) string {
 	// Tiny helper to keep prompt JSON readable. strconv.FormatInt would
 	// pull in another import for one call site.

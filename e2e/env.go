@@ -26,6 +26,7 @@ const (
 	ProviderGemini    envProvider = "gemini_native"
 	ProviderKimi      envProvider = "chat_completions_kimi"
 	ProviderGLM       envProvider = "chat_completions_glm"
+	ProviderMiniMax   envProvider = "anthropic_minimax"
 )
 
 // ProviderEnv carries the resolved environment for one provider. A
@@ -109,6 +110,20 @@ func GLMEnv() ProviderEnv {
 		APIKey:     key,
 		BaseURL:    envOr("GLM_BASE_URL", "https://open.bigmodel.cn/api/paas/v4"),
 		Model:      envOr("GLM_MODEL", "glm-4.6"),
+	}
+}
+
+// MiniMaxEnv reads MINIMAX_API_KEY / MINIMAX_BASE_URL / MINIMAX_MODEL.
+// MiniMax speaks the Anthropic protocol natively at
+// https://api.minimax.io/anthropic/v1/messages, so it plugs in as a
+// second backend on the anthropic adapter via WithAnthropicCompat.
+func MiniMaxEnv() ProviderEnv {
+	key := os.Getenv("MINIMAX_API_KEY")
+	return ProviderEnv{
+		Configured: key != "",
+		APIKey:     key,
+		BaseURL:    envOr("MINIMAX_BASE_URL", "https://api.minimax.io/anthropic"),
+		Model:      envOr("MINIMAX_MODEL", "MiniMax-M2.7"),
 	}
 }
 

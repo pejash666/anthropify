@@ -117,3 +117,28 @@ func newKimiClient(t *testing.T) (*anthropify.Client, string) {
 func newGLMClient(t *testing.T) (*anthropify.Client, string) {
 	return newChatCompletionsClient(t, GLMEnv(), "glm", "GLM_API_KEY")
 }
+
+// newMiniMaxClient builds a *anthropify.Client wired to the MiniMax
+// Anthropic-compat backend. MiniMax shares the anthropic adapter with
+// real Claude — the only difference is BaseURL — so we register it via
+// WithAnthropicCompat under the "minimax" name and pin the MiniMax-
+// model prefix to that backend with WithModelRoute.
+func newMiniMaxClient(t *testing.T) (*anthropify.Client, string) {
+	t.Helper()
+	env := MiniMaxEnv()
+	skipIfUnset(t, env, "MINIMAX_API_KEY")
+	cli, err := anthropify.New(
+		anthropify.WithAnthropicCompat("minimax", anthropify.AnthropicConfig{
+			APIKey:  env.APIKey,
+			BaseURL: env.BaseURL,
+		}),
+		anthropify.WithModelRoute("MiniMax-", anthropify.Route{
+			Provider: anthropify.ProviderAnthropic,
+			Backend:  "minimax",
+		}),
+	)
+	if err != nil {
+		t.Fatalf("anthropify.New: %v", err)
+	}
+	return cli, env.Model
+}
