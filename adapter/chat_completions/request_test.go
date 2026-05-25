@@ -543,3 +543,34 @@ func TestBuildRequest_ToolResultMultipleRounds(t *testing.T) {
 		t.Fatalf("messages[4] = %v", last)
 	}
 }
+
+// TestBuildRequest_TopLevelCacheControl_DroppedAsNoOp documents and
+// asserts the v0.2.0 Track C contract: when the canonical anthropify
+// layer installs a top-level cache_control directive (via
+// SetCacheControl), the chat_completions adapter must NOT forward it
+// to the OpenAI-shaped /v1/chat/completions wire body. Kimi, GLM,
+// DeepSeek and similar backends auto-cache server-side and have no
+// analogous request field.
+func TestBuildRequest_TopLevelCacheControl_DroppedAsNoOp(t *testing.T) {
+	rawIn := []byte(`{"model":"deepseek-chat","max_tokens":64,"messages":[{"role":"user","content":[{"type":"text","text":"hi"}]}]}`)
+	var params anthropicsdk.MessageNewParams
+	if err := json.Unmarshal(rawIn, &params); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	// Mirror anthropify.SetCacheControl behaviour from the canonical
+	// layer (the adapter package can't import anthropify).
+	params.SetExtraFields(map[string]any{
+		"cache_control": map[string]any{"type": "ephemeral"},
+	})
+	body, err := BuildRequest(context.Background(), params, false)
+	if err != nil {
+		t.Fatalf("BuildRequest: %v", err)
+	}
+	var out map[string]any
+	if err := json.Unmarshal(body, &out); err != nil {
+		t.Fatalf("unmarshal body: %v", err)
+	}
+	if _, ok := out["cache_control"]; ok {
+		t.Fatalf("chat_completions wire body must drop cache_control; got body=%s", body)
+	}
+}

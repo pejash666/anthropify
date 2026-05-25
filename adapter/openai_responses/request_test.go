@@ -134,3 +134,37 @@ func asString(v any) string {
 func startsWith(s, prefix string) bool {
 	return len(s) >= len(prefix) && s[:len(prefix)] == prefix
 }
+
+// TestBuildRequest_TopLevelCacheControl_DroppedAsNoOp documents and
+// asserts the v0.2.0 Track C contract: when the canonical anthropify
+// layer installs a top-level cache_control directive (via
+// SetCacheControl), the openai_responses adapter must NOT forward it
+// to the OpenAI Responses /v1/responses wire body. OpenAI prompt
+// caching is fully automatic on prompts > 1024 tokens server-side
+// and has no analogous request field.
+func TestBuildRequest_TopLevelCacheControl_DroppedAsNoOp(t *testing.T) {
+	src := []byte(`{
+		"model": "gpt-5",
+		"max_tokens": 64,
+		"messages": [{"role":"user","content":[{"type":"text","text":"hi"}]}]
+	}`)
+	var req anthropicsdk.MessageNewParams
+	if err := json.Unmarshal(src, &req); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	// Mirror anthropify.SetCacheControl from the canonical layer.
+	req.SetExtraFields(map[string]any{
+		"cache_control": map[string]any{"type": "ephemeral"},
+	})
+	out, err := BuildRequest(context.Background(), req, false)
+	if err != nil {
+		t.Fatalf("BuildRequest: %v", err)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(out, &got); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if _, ok := got["cache_control"]; ok {
+		t.Fatalf("openai_responses wire body must drop cache_control; got=%s", out)
+	}
+}

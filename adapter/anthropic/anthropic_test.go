@@ -96,3 +96,53 @@ func TestAdapter_Stream(t *testing.T) {
 		t.Fatalf("types = %v, want %s", types, want)
 	}
 }
+
+// TestAdapter_TopLevelCacheControl_PassesThrough is a contract test
+// for v0.2.0 Track C. It guarantees that an ExtraFields["cache_control"]
+// installed at the top of MessageNewParams (as anthropify.SetCacheControl
+// does) survives buildPayload's marshal-into-map round-trip and lands
+// as a top-level cache_control object on the wire.
+//
+// Regression guard: if the upstream SDK ever stops merging ExtraFields
+// into the request top-level JSON, this test catches it before the
+// canonical anthropify.SetCacheControl helper silently regresses.
+func TestAdapter_TopLevelCacheControl_PassesThrough(t *testing.T) {
+	var captured []byte
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		captured, _ = io.ReadAll(r.Body)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"id":"m","type":"message","role":"assistant","model":"claude-3-5-sonnet-20241022","content":[{"type":"text","text":"ok"}],"stop_reason":"end_turn","usage":{"input_tokens":1,"output_tokens":1}}`)
+	}))
+	defer srv.Close()
+
+	a, err := New("anthropic", Config{APIKey: "s", BaseURL: srv.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	src := []byte(`{"model":"claude-3-5-sonnet-20241022","max_tokens":10,"messages":[{"role":"user","content":[{"type":"text","text":"hi"}]}]}`)
+	var req anthropicsdk.MessageNewParams
+	if err := json.Unmarshal(src, &req); err != nil {
+		t.Fatal(err)
+	}
+	// Mirror what anthropify.SetCacheControl does at the canonical
+	// layer; the adapter package can't import anthropify (cycle).
+	req.SetExtraFields(map[string]any{
+		"cache_control": map[string]any{"type": "ephemeral"},
+	})
+
+	if _, err := a.Invoke(context.Background(), req); err != nil {
+		t.Fatalf("Invoke: %v", err)
+	}
+	var top map[string]any
+	if err := json.Unmarshal(captured, &top); err != nil {
+		t.Fatalf("body parse: %v", err)
+	}
+	cc, ok := top["cache_control"].(map[string]any)
+	if !ok {
+		t.Fatalf("wire body missing top-level cache_control: %s", captured)
+	}
+	if cc["type"] != "ephemeral" {
+		t.Fatalf("cache_control.type = %v, want ephemeral", cc["type"])
+	}
+}
