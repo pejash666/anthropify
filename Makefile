@@ -1,7 +1,8 @@
 # Convenience targets. The library itself has no build step; everything
 # routes through `go`.
 
-.PHONY: test test-e2e test-e2e-record vet build
+.PHONY: test test-e2e test-e2e-record vet build examples \
+	example-01 example-02 example-03 example-04 example-05 example-06
 
 build:
 	go build ./...
@@ -22,3 +23,25 @@ test-e2e:
 # itself is reserved; see e2e/helpers/assertions.go for the TODO.
 test-e2e-record:
 	@E2E_RECORD_FIXTURES=true ./scripts/test-e2e.sh $(ARGS)
+
+# Compile-check every example program. Building into /dev/null keeps
+# binaries from littering the repo root.
+examples:
+	@for d in examples/*/; do \
+		go build -o /dev/null ./$$d || exit 1; \
+	done
+
+# Run a single example. Each target loads .env.e2e if present so API
+# keys are available without manual sourcing.
+example-01:
+	@set -a; [ -f .env.e2e ] && . ./.env.e2e; set +a; go run ./examples/01-hello
+example-02:
+	@set -a; [ -f .env.e2e ] && . ./.env.e2e; set +a; go run ./examples/02-multi-provider
+example-03:
+	@set -a; [ -f .env.e2e ] && . ./.env.e2e; set +a; go run ./examples/03-model-hot-switching
+example-04:
+	@set -a; [ -f .env.e2e ] && . ./.env.e2e; set +a; go run ./examples/04-tool-use-portable
+example-05:
+	@set -a; [ -f .env.e2e ] && . ./.env.e2e; set +a; go run ./examples/05-thinking-blocks
+example-06:
+	@set -a; [ -f .env.e2e ] && . ./.env.e2e; set +a; go run ./examples/06-streaming-events

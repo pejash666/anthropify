@@ -20,23 +20,6 @@ Gemini、Kimi、GLM、DeepSeek 等多家 LLM 提供商。它在进程内完成�
 调用方始终只面对 `anthropic.MessageNewParams` 和
 `anthropic.MessageStreamEventUnion`。
 
-## 为什么选 Anthropic 作为标准形态？
-
-各家流式协议差异很大，选什么形态作为 canonical event 会影响下游所有 agent 代码。
-
-- Anthropic 的流是一组语义清晰、有序、有结构边界的事件：`message_start`、
-  `content_block_start`、`content_block_delta`、`content_block_stop`、
-  `message_delta`、`message_stop`。文本、tool use、thinking 各占独立的 content
-  block。
-- OpenAI Chat Completions 把所有内容塞进 `choices[*].delta`。工具调用、
-  reasoning、refusal 都是边角字段，不同类型的内容之间没有结构性分隔。
-- OpenAI Responses 把同一条流拆得很细（`response.output_item.added`、
-  `response.content_part.added`、`response.output_text.delta` 等），额外的粒度
-  带来记账负担，但并没有让线上形态更易消费。
-
-对一个需要稳定内部事件词汇的 agent 框架来说，Anthropic 的形态在粒度曲线上落在
-一个合用的点。Anthropify 把它作为规范形态，并把所有 provider 都归一化到它。
-
 ## 快速开始
 
 ```go
@@ -93,6 +76,43 @@ func main() {
 msg, err := client.CreateMessage(ctx, req)
 ```
 
+## 实战演示
+
+Anthropify 的核心主张是：一份 Anthropic 规范形态的对话切片，可以在中途任意切
+换 provider。为了证明这一点，[example 03](./examples/03-model-hot-switching)
+让一段对话先后流过四个上游——Claude 规划、Kimi 写代码、GLM 翻译、Claude 收
+尾——全程不重建消息历史。每一轮唯一变化的字段是 `req.Model`。
+
+<p align="center"><img src="./examples/03-model-hot-switching/flow.png" alt="model hot-switching" width="720"></p>
+
+```go
+var messages []anthropic.MessageParam
+for _, t := range turns {
+    messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(t.question)))
+    reply, _ := runTurn(client, t.model, t.maxTokens, messages) // 只 Model 变
+    messages = append(messages, anthropic.NewAssistantMessage(anthropic.NewTextBlock(reply)))
+}
+```
+
+> 完整可运行版本见 [examples/03-model-hot-switching](./examples/03-model-hot-switching)。
+
+## 为什么选 Anthropic 作为标准形态？
+
+各家流式协议差异很大，选什么形态作为 canonical event 会影响下游所有 agent 代码。
+
+- Anthropic 的流是一组语义清晰、有序、有结构边界的事件：`message_start`、
+  `content_block_start`、`content_block_delta`、`content_block_stop`、
+  `message_delta`、`message_stop`。文本、tool use、thinking 各占独立的 content
+  block。
+- OpenAI Chat Completions 把所有内容塞进 `choices[*].delta`。工具调用、
+  reasoning、refusal 都是边角字段，不同类型的内容之间没有结构性分隔。
+- OpenAI Responses 把同一条流拆得很细（`response.output_item.added`、
+  `response.content_part.added`、`response.output_text.delta` 等），额外的粒度
+  带来记账负担，但并没有让线上形态更易消费。
+
+对一个需要稳定内部事件词汇的 agent 框架来说，Anthropic 的形态在粒度曲线上落在
+一个合用的点。Anthropify 把它作为规范形态，并把所有 provider 都归一化到它。
+
 ## 支持的 Provider
 
 | Provider          | 流式  | 非流式                  | Tool use | Thinking         | cache_control |
@@ -103,6 +123,12 @@ msg, err := client.CreateMessage(ctx, req)
 | Kimi (Moonshot)   | 是    | drain-and-assemble       | 是       | 是               | —             |
 | GLM (智谱)        | 是    | drain-and-assemble       | 是       | 视模型而定       | —             |
 | DeepSeek          | 是    | drain-and-assemble       | 是       | 是 (V3.2)        | —             |
+
+> Anthropify 推荐使用 `gemini-3.5-flash`（或任意 Gemini 3.x flash 系列）。
+> Adapter 在 `generationConfig.thinkingConfig` 中发送 `thinkingLevel`，
+> 2.5 系列会以 HTTP 400 拒绝，因此请使用 3.x 系列。Pro 系列模型
+> （`gemini-3-pro-preview`、`gemini-3.1-pro-preview`）需要 Google
+> 显式 preview 准入，开箱即用拿不到。
 
 只有 Anthropic adapter 直接暴露原生非流式接口。其他 provider 在调用
 `CreateMessage` 时，会打开流并由库内部把 content block 组装成最终的

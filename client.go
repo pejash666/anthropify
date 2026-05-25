@@ -318,6 +318,14 @@ func assembleFromStream(ch <-chan adapter.RawEvent) (*anthropic.Message, error) 
 				} else {
 					piece["input"] = map[string]any{}
 				}
+				// Preserve provider-specific thought_signature (e.g. Gemini
+				// 3.x) so callers can replay it on the next turn via
+				// SetExtraFields. The SDK stores unknown fields in
+				// ContentBlockUnion.JSON.raw; callers retrieve them with
+				// the .RawJSON() helper.
+				if sig, ok := cb["thought_signature"].(string); ok && sig != "" {
+					piece["thought_signature"] = sig
+				}
 				pieces = append(pieces, piece)
 			default:
 				// Pass through unknown block types verbatim.

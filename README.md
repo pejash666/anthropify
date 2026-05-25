@@ -20,27 +20,6 @@ It does protocol translation, SSE streaming, tool use, thinking blocks and
 `cache_control` in-process — no proxy server in front. Callers only ever see
 `anthropic.MessageNewParams` and `anthropic.MessageStreamEventUnion`.
 
-## Why Anthropic-canonical?
-
-Streaming protocols differ widely across vendors, and the shape you pick as
-the canonical event format affects every downstream agent.
-
-- Anthropic's stream is a small, ordered set of events with explicit content
-  block boundaries: `message_start`, `content_block_start`,
-  `content_block_delta`, `content_block_stop`, `message_delta`,
-  `message_stop`. Text, tool use and thinking each live in their own block.
-- OpenAI Chat Completions packs everything into `choices[*].delta`. Tool
-  calls, reasoning, and refusals are tacked on as side fields with no
-  structural separation between content kinds.
-- OpenAI Responses splits the same stream into a much larger event set
-  (`response.output_item.added`, `response.content_part.added`,
-  `response.output_text.delta`, and so on). The extra granularity adds
-  bookkeeping without making the wire shape easier to consume.
-
-For an agent framework that needs a stable internal event vocabulary, the
-Anthropic shape sits at a useful point on the granularity curve. Anthropify
-adopts it as the canonical form and normalises every provider into it.
-
 ## Quick start
 
 ```go
@@ -97,6 +76,48 @@ Non-streaming uses the same request type and returns `*anthropic.Message`:
 msg, err := client.CreateMessage(ctx, req)
 ```
 
+## See it in action
+
+Anthropify's claim is that one Anthropic-canonical conversation slice can
+flow through any provider mid-thread. To prove it, [example 03](./examples/03-model-hot-switching)
+runs a single chat across four upstreams — Claude plans, Kimi codes, GLM
+translates, Claude summarises — without ever rebuilding the message
+history. The only field that changes between turns is `req.Model`.
+
+<p align="center"><img src="./examples/03-model-hot-switching/flow.png" alt="model hot-switching" width="720"></p>
+
+```go
+var messages []anthropic.MessageParam
+for _, t := range turns {
+    messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(t.question)))
+    reply, _ := runTurn(client, t.model, t.maxTokens, messages) // only Model changes
+    messages = append(messages, anthropic.NewAssistantMessage(anthropic.NewTextBlock(reply)))
+}
+```
+
+> See [examples/03-model-hot-switching](./examples/03-model-hot-switching) for the full runnable example.
+
+## Why Anthropic-canonical?
+
+Streaming protocols differ widely across vendors, and the shape you pick as
+the canonical event format affects every downstream agent.
+
+- Anthropic's stream is a small, ordered set of events with explicit content
+  block boundaries: `message_start`, `content_block_start`,
+  `content_block_delta`, `content_block_stop`, `message_delta`,
+  `message_stop`. Text, tool use and thinking each live in their own block.
+- OpenAI Chat Completions packs everything into `choices[*].delta`. Tool
+  calls, reasoning, and refusals are tacked on as side fields with no
+  structural separation between content kinds.
+- OpenAI Responses splits the same stream into a much larger event set
+  (`response.output_item.added`, `response.content_part.added`,
+  `response.output_text.delta`, and so on). The extra granularity adds
+  bookkeeping without making the wire shape easier to consume.
+
+For an agent framework that needs a stable internal event vocabulary, the
+Anthropic shape sits at a useful point on the granularity curve. Anthropify
+adopts it as the canonical form and normalises every provider into it.
+
 ## Supported providers
 
 | Provider          | Streaming | Non-streaming         | Tool use | Thinking          | cache_control |
@@ -107,6 +128,13 @@ msg, err := client.CreateMessage(ctx, req)
 | Kimi (Moonshot)   | yes       | drain-and-assemble     | yes      | yes               | —             |
 | GLM (Zhipu)       | yes       | drain-and-assemble     | yes      | model-dependent   | —             |
 | DeepSeek          | yes       | drain-and-assemble     | yes      | yes (V3.2)        | —             |
+
+> Anthropify recommends `gemini-3.5-flash` (or any Gemini 3.x flash
+> variant). The adapter emits `thinkingLevel` in
+> `generationConfig.thinkingConfig`, which the 2.5 series rejects with
+> HTTP 400, so plan to use the 3.x family. Pro-series models
+> (`gemini-3-pro-preview`, `gemini-3.1-pro-preview`) require explicit
+> Google preview enrolment and are not assumed available out of the box.
 
 Only the Anthropic adapter exposes a real non-streaming endpoint. For every
 other provider, `CreateMessage` opens the stream and assembles the final
