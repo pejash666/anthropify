@@ -168,3 +168,121 @@ func TestBuildRequest_TopLevelCacheControl_DroppedAsNoOp(t *testing.T) {
 		t.Fatalf("openai_responses wire body must drop cache_control; got=%s", out)
 	}
 }
+
+// TestBuildRequestForAzure_OverridesModel asserts the layered model
+// fallback rule from docs/design/v0.2.0-azure-responses.md §5.4: when
+// effectiveModel is non-empty, the request body's `model` field is
+// replaced with it. Azure deployment-bound URLs already encode the
+// deployment in the path, but the body field still expects the
+// deployment name on Azure resources, so we set both.
+func TestBuildRequestForAzure_OverridesModel(t *testing.T) {
+	src := []byte(`{
+		"model": "gpt-5",
+		"max_tokens": 64,
+		"messages": [{"role":"user","content":[{"type":"text","text":"hi"}]}]
+	}`)
+	var req anthropicsdk.MessageNewParams
+	if err := json.Unmarshal(src, &req); err != nil {
+		t.Fatal(err)
+	}
+	out, err := BuildRequestForAzure(context.Background(), req, true, "azure-gpt5-PTU")
+	if err != nil {
+		t.Fatalf("BuildRequestForAzure: %v", err)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(out, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got["model"] != "azure-gpt5-PTU" {
+		t.Fatalf("model = %v, want azure-gpt5-PTU", got["model"])
+	}
+}
+
+// TestBuildRequestForAzure_EmptyOverrideKeepsCanonical proves the
+// pass-through layer of the fallback: empty effectiveModel must leave
+// req.Model untouched. This is what the deployment-less Azure path
+// relies on (Route.UpstreamModel rewrite happens upstream in
+// Client.dispatch; the adapter sees the rewritten value as req.Model).
+func TestBuildRequestForAzure_EmptyOverrideKeepsCanonical(t *testing.T) {
+	src := []byte(`{
+		"model": "gpt-5",
+		"max_tokens": 64,
+		"messages": [{"role":"user","content":[{"type":"text","text":"hi"}]}]
+	}`)
+	var req anthropicsdk.MessageNewParams
+	if err := json.Unmarshal(src, &req); err != nil {
+		t.Fatal(err)
+	}
+	out, err := BuildRequestForAzure(context.Background(), req, true, "")
+	if err != nil {
+		t.Fatalf("BuildRequestForAzure: %v", err)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(out, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got["model"] != "gpt-5" {
+		t.Fatalf("model = %v, want gpt-5 (canonical pass-through)", got["model"])
+	}
+}
+
+// TestBuildRequestForAzure_MatchesBuildRequestWhenEmpty is a stronger
+// invariant: byte-identical output to BuildRequest when no override
+// is requested. Guards against accidental regression of the vanilla
+// path through the new entry point.
+func TestBuildRequestForAzure_MatchesBuildRequestWhenEmpty(t *testing.T) {
+	src := []byte(`{
+		"model": "gpt-5",
+		"max_tokens": 64,
+		"system": [{"type":"text","text":"You are helpful."}],
+		"messages": [{"role":"user","content":[{"type":"text","text":"hi"}]}]
+	}`)
+	var req anthropicsdk.MessageNewParams
+	if err := json.Unmarshal(src, &req); err != nil {
+		t.Fatal(err)
+	}
+	a, err := BuildRequest(context.Background(), req, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := BuildRequestForAzure(context.Background(), req, true, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(a) != string(b) {
+		t.Fatalf("byte mismatch:\n  BuildRequest         = %s\n  BuildRequestForAzure = %s", a, b)
+	}
+}
+
+// TestBuildRequestForAzure_CacheControlNoop extends the Track C
+// silent-no-op contract to the Azure entry point. Azure OpenAI's
+// Responses API uses the same automatic server-side cache as vanilla
+// OpenAI; the body must NOT carry cache_control.
+func TestBuildRequestForAzure_CacheControlNoop(t *testing.T) {
+	src := []byte(`{
+		"model": "gpt-5",
+		"max_tokens": 64,
+		"messages": [{"role":"user","content":[{"type":"text","text":"hi"}]}]
+	}`)
+	var req anthropicsdk.MessageNewParams
+	if err := json.Unmarshal(src, &req); err != nil {
+		t.Fatal(err)
+	}
+	req.SetExtraFields(map[string]any{
+		"cache_control": map[string]any{"type": "ephemeral"},
+	})
+	out, err := BuildRequestForAzure(context.Background(), req, false, "azure-deployment")
+	if err != nil {
+		t.Fatalf("BuildRequestForAzure: %v", err)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(out, &got); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := got["cache_control"]; ok {
+		t.Fatalf("Azure wire body must drop cache_control; got=%s", out)
+	}
+	if got["model"] != "azure-deployment" {
+		t.Fatalf("model not overridden: %v", got["model"])
+	}
+}

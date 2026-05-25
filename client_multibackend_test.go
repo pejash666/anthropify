@@ -497,3 +497,181 @@ func TestAdapterName_DefaultSugarKeepsSuffix(t *testing.T) {
 		t.Fatalf("openai name = %q (expected suffix preserved)", got)
 	}
 }
+
+// ----------------------------------------------------------------------
+// Azure OpenAI Responses (v0.2.0 Track E) — covers the registration,
+// duplicate-name guard, dispatch path, and dual-auth headers
+// end-to-end through Client.New + Client.dispatch.
+// ----------------------------------------------------------------------
+
+// TestAzureOpenAI_BackendRegistered verifies the Azure backend lands in
+// the same `openais` map as vanilla OpenAI, with the configured name
+// surfacing through Adapter.Name. This is the symmetry decision from
+// docs/design/v0.2.0-azure-responses.md §4.2.
+func TestAzureOpenAI_BackendRegistered(t *testing.T) {
+	stub := newRecordingStub(minimalOpenAIResponsesSSE)
+	srv := httptest.NewServer(stub.handler())
+	defer srv.Close()
+
+	client, err := New(
+		WithAzureOpenAI("azure", AzureOpenAIConfig{
+			BaseURL:    srv.URL,
+			APIKey:     "k",
+			APIVersion: "2025-03-01-preview",
+			Deployment: "gpt-5-PTU",
+		}),
+	)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	a, ok := client.openais["azure"]
+	if !ok {
+		t.Fatalf("azure backend missing; openais=%v", keysOf(client.openais))
+	}
+	if got := a.Name(); got != "openai_responses:azure" {
+		t.Fatalf("name = %q, want openai_responses:azure", got)
+	}
+}
+
+// TestAzureOpenAI_DuplicateNameRejected enforces the namespace-sharing
+// rule from docs/design/v0.2.0-azure-responses.md §4.3: registering
+// the same backend name under both helpers must fail at construction
+// time, not silently overwrite.
+func TestAzureOpenAI_DuplicateNameRejected(t *testing.T) {
+	stub := newRecordingStub(minimalOpenAIResponsesSSE)
+	srv := httptest.NewServer(stub.handler())
+	defer srv.Close()
+
+	_, err := New(
+		WithOpenAIResponsesCompat("shared", OpenAIResponsesConfig{
+			APIKey:  "sk",
+			BaseURL: srv.URL,
+		}),
+		WithAzureOpenAI("shared", AzureOpenAIConfig{
+			BaseURL:    srv.URL,
+			APIKey:     "k",
+			APIVersion: "2025-03-01-preview",
+		}),
+	)
+	if err == nil {
+		t.Fatal("expected duplicate-name error, got nil")
+	}
+	if !strings.Contains(err.Error(), "shared") || !strings.Contains(err.Error(), "Azure") {
+		t.Fatalf("error = %q, expected mention of name + Azure", err.Error())
+	}
+}
+
+// TestAzureOpenAI_DispatchAndDualAuth is the end-to-end happy path:
+// register an Azure backend, route a model prefix to it, send a
+// streamed request, drain it, and assert the upstream observed BOTH
+// auth headers and the deployment-bound URL form.
+func TestAzureOpenAI_DispatchAndDualAuth(t *testing.T) {
+	stub := newRecordingStub(minimalOpenAIResponsesSSE)
+	srv := httptest.NewServer(stub.handler())
+	defer srv.Close()
+
+	client, err := New(
+		WithAzureOpenAI("azure", AzureOpenAIConfig{
+			BaseURL:    srv.URL,
+			APIKey:     "azure-secret",
+			APIVersion: "2025-03-01-preview",
+			Deployment: "gpt-5-PTU",
+		}),
+		WithModelRoute("gpt-5", Route{
+			Provider: ProviderOpenAIResponses,
+			Backend:  "azure",
+		}),
+	)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	sr, err := client.CreateMessageStream(context.Background(), makeAnthropicReq(t, "gpt-5"))
+	if err != nil {
+		t.Fatalf("CreateMessageStream: %v", err)
+	}
+	_ = drainStream(t, sr)
+
+	if stub.Hits() != 1 {
+		t.Fatalf("upstream hits = %d, want 1", stub.Hits())
+	}
+	if got := stub.LastAuth(); got != "Bearer azure-secret" {
+		t.Errorf("Authorization = %q", got)
+	}
+	if got := stub.LastHeader("api-key"); got != "azure-secret" {
+		t.Errorf("api-key header = %q", got)
+	}
+	// httptest.Server strips its own host so r.URL.Path is the wire
+	// path. The deployment-bound URL form puts the deployment in the
+	// path; api-version goes in the query (covered by the headers
+	// test in adapter_headers_test.go — here we just confirm dispatch
+	// arrived at the Azure-shaped path, not /v1/responses).
+	if !strings.Contains(stub.lastPath, "/openai/deployments/gpt-5-PTU/responses") {
+		t.Errorf("path = %q, want Azure deployment-bound shape", stub.lastPath)
+	}
+}
+
+// TestAzureOpenAI_RouteUpstreamModelFallback exercises the middle
+// layer of the layered model fallback from
+// docs/design/v0.2.0-azure-responses.md §5.4: when cfg.Deployment is
+// empty, Route.UpstreamModel rewrites req.Model upstream in
+// Client.dispatch and the Azure adapter's deployment-less URL carries
+// that rewritten value in the body.
+func TestAzureOpenAI_RouteUpstreamModelFallback(t *testing.T) {
+	// Capture the wire body to verify the rewritten model field.
+	bodies := make(chan []byte, 1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		select {
+		case bodies <- b:
+		default:
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = io.WriteString(w, minimalOpenAIResponsesSSE)
+	}))
+	defer srv.Close()
+
+	client, err := New(
+		WithAzureOpenAI("azure", AzureOpenAIConfig{
+			BaseURL:    srv.URL,
+			APIKey:     "k",
+			APIVersion: "2025-03-01-preview",
+			// Deployment intentionally unset — we rely on the
+			// Route.UpstreamModel layer.
+		}),
+		WithModelRoute("gpt-5", Route{
+			Provider:      ProviderOpenAIResponses,
+			Backend:       "azure",
+			UpstreamModel: "azure-deployment-name",
+		}),
+	)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	sr, err := client.CreateMessageStream(context.Background(), makeAnthropicReq(t, "gpt-5"))
+	if err != nil {
+		t.Fatalf("CreateMessageStream: %v", err)
+	}
+	_ = drainStream(t, sr)
+
+	select {
+	case body := <-bodies:
+		if !strings.Contains(string(body), `"model":"azure-deployment-name"`) {
+			t.Errorf("body should carry rewritten model, got: %s", body)
+		}
+	default:
+		t.Fatal("upstream not hit")
+	}
+}
+
+// keysOf is a tiny helper for diagnostics in failure messages.
+func keysOf[V any](m map[string]V) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	return out
+}
+
+// errors / io / context imports already declared above; this package
+// stub keeps go vet happy if the file ever ends without using them.
+var _ = errors.New

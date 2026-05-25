@@ -27,6 +27,15 @@ import (
 // $ref / additionalProperties:true caused opaque 400s from the
 // Responses API.
 func BuildRequest(ctx context.Context, req anthropicsdk.MessageNewParams, stream bool) ([]byte, error) {
+	return BuildRequestForAzure(ctx, req, stream, "")
+}
+
+// BuildRequestForAzure mirrors BuildRequest but, when effectiveModel is
+// non-empty, overrides the wire-side `model` field with it. Used by
+// the Azure adapter to surface cfg.Deployment in the request body —
+// Azure expects the deployment name in `model` regardless of which URL
+// form is used. Passing "" gives byte-identical output to BuildRequest.
+func BuildRequestForAzure(ctx context.Context, req anthropicsdk.MessageNewParams, stream bool, effectiveModel string) ([]byte, error) {
 	raw, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("openai_responses: marshal anthropic request: %w", err)
@@ -39,6 +48,9 @@ func BuildRequest(ctx context.Context, req anthropicsdk.MessageNewParams, stream
 	out := map[string]any{
 		"model":  src["model"],
 		"stream": stream,
+	}
+	if effectiveModel != "" {
+		out["model"] = effectiveModel
 	}
 
 	// Map system prompt -> instructions.

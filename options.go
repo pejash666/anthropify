@@ -74,6 +74,54 @@ type OpenAIResponsesConfig struct {
 // for source compatibility with v0.1.x callers.
 type OpenAIConfig = OpenAIResponsesConfig
 
+// AzureOpenAIConfig configures an Azure OpenAI Responses backend.
+// Registered via WithAzureOpenAI; multiple backends may be registered
+// under distinct names. Internally this rides on the same
+// adapter/openai_responses code path as vanilla OpenAI — only URL
+// composition and authentication headers differ.
+//
+// Two URL forms are supported, auto-picked by whether Deployment is set:
+//   - Deployment != "" => deployment-bound URL
+//     <BaseURL>/openai/deployments/<Deployment>/responses?api-version=<APIVersion>
+//   - Deployment == "" => deployment-less URL
+//     <BaseURL>/openai/responses?api-version=<APIVersion>
+//     The body's model field then carries the deployment name verbatim
+//     (the caller's req.Model after Route.UpstreamModel rewrite).
+//
+// Both api-key and Authorization: Bearer headers are sent on every
+// request — the former is Azure's canonical key header, the latter is
+// required for Entra/AAD access tokens and works with resource keys
+// too. This belt-and-suspenders approach is robust against APIM
+// gateways that strip one or the other.
+//
+// Backend names share the same namespace as
+// WithOpenAIResponsesCompat; registering both helpers under the same
+// name is rejected at New() time. See
+// docs/design/v0.2.0-azure-responses.md for the authoritative design
+// and rationale.
+type AzureOpenAIConfig struct {
+	// BaseURL is the Azure resource endpoint, e.g.
+	// "https://my-resource.openai.azure.com" (no path). Required.
+	BaseURL string
+	// APIKey is either an Azure resource key or an Entra (AAD)
+	// access token. Required.
+	APIKey string
+	// APIVersion is the ?api-version=... query value, e.g.
+	// "2025-03-01-preview". Required — anthropify deliberately does
+	// not pick a default so api-version upgrades stay visible in
+	// source control.
+	APIVersion string
+	// Deployment, when non-empty, pins this backend to a single Azure
+	// deployment and selects the deployment-bound URL form. Empty
+	// falls back to the deployment-less URL form, in which case the
+	// deployment name is read from the request body's model field
+	// (the caller's req.Model, optionally rewritten by
+	// Route.UpstreamModel).
+	Deployment string
+	// ExtraHeaders is merged into every request.
+	ExtraHeaders http.Header
+}
+
 // AnthropicConfig configures the Anthropic passthrough adapter.
 type AnthropicConfig struct {
 	APIKey       string
@@ -129,6 +177,7 @@ type config struct {
 	// (e.g. "anthropic", "minimax") to its per-backend config.
 	anthropicCompat       map[string]AnthropicConfig
 	openaiResponsesCompat map[string]OpenAIResponsesConfig
+	azureOpenAI           map[string]AzureOpenAIConfig
 
 	// Single-instance (Track D — stays single in v0.2.0).
 	gemini *GeminiConfig
@@ -216,6 +265,39 @@ func WithAnthropic(cfg AnthropicConfig) Option {
 	return WithAnthropicCompat("anthropic", cfg)
 }
 
+// WithAzureOpenAI registers an Azure OpenAI Responses backend under
+// the given name. Multiple calls accumulate; the name is used as the
+// Route.Backend value. Backend names share the same namespace as
+// WithOpenAIResponsesCompat — registering both helpers under the same
+// name is rejected at New() time.
+//
+// Typical usage pairs this option with WithModelRoute, since Azure
+// deployment names are usually distinct from canonical OpenAI model
+// names:
+//
+//	ap.WithAzureOpenAI("azure", ap.AzureOpenAIConfig{
+//	    BaseURL:    "https://my-resource.openai.azure.com",
+//	    APIKey:     os.Getenv("AZURE_OPENAI_API_KEY"),
+//	    APIVersion: "2025-03-01-preview",
+//	    Deployment: "gpt-5-deployment",
+//	}),
+//	ap.WithModelRoute("gpt-5", ap.Route{
+//	    Provider: ap.ProviderOpenAIResponses,
+//	    Backend:  "azure",
+//	}),
+//
+// See docs/design/v0.2.0-azure-responses.md for the authoritative
+// design covering URL forms, dual-auth headers, and the layered model
+// fallback (cfg.Deployment > Route.UpstreamModel > req.Model).
+func WithAzureOpenAI(name string, cfg AzureOpenAIConfig) Option {
+	return func(c *config) {
+		if c.azureOpenAI == nil {
+			c.azureOpenAI = make(map[string]AzureOpenAIConfig)
+		}
+		c.azureOpenAI[name] = cfg
+	}
+}
+
 // WithGemini enables the Gemini native adapter.
 func WithGemini(cfg GeminiConfig) Option {
 	return func(c *config) {
@@ -273,6 +355,7 @@ func defaultConfig() *config {
 		logger:                newNopLogger(),
 		anthropicCompat:       make(map[string]AnthropicConfig),
 		openaiResponsesCompat: make(map[string]OpenAIResponsesConfig),
+		azureOpenAI:           make(map[string]AzureOpenAIConfig),
 		chatCompat:            make(map[string]OpenAICompatConfig),
 		modelRoutes: map[string]Route{
 			"claude-": {Provider: ProviderAnthropic},

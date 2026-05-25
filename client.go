@@ -70,6 +70,29 @@ func New(opts ...Option) (*Client, error) {
 		cli.openais[name] = a
 	}
 
+	for name, ac := range cfg.azureOpenAI {
+		// Backend names share the same namespace as
+		// openaiResponsesCompat. Reject collisions explicitly so
+		// callers don't get a silent overwrite.
+		if _, dup := cli.openais[name]; dup {
+			return nil, fmt.Errorf(
+				"anthropify: backend name %q registered as both OpenAI and Azure OpenAI", name)
+		}
+		a, err := openairesponses.New(name, openairesponses.Config{
+			APIKey:       ac.APIKey,
+			BaseURL:      ac.BaseURL,
+			ExtraHeaders: ac.ExtraHeaders,
+			HTTPClient:   cfg.httpClient,
+			Azure:        true,
+			APIVersion:   ac.APIVersion,
+			Deployment:   ac.Deployment,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("anthropify: azure_openai[%s] adapter: %w", name, err)
+		}
+		cli.openais[name] = a
+	}
+
 	if cfg.gemini != nil {
 		a, err := geminiadapter.New(geminiadapter.Config{
 			Mode:         cfg.gemini.Mode,
