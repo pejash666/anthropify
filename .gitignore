@@ -11,3 +11,7 @@ testdata/fixtures/recorded/
 *.test
 *.out
 .DS_Store
+
+# Local agent scratch state. Never commit.
+.resume-compiler/
+

@@ -1,0 +1,16 @@
+{
+  "type": "object",
+  "description": "Nested object with required and enum.",
+  "properties": {
+    "user": {
+      "type": "object",
+      "properties": {
+        "name": {"type": "string"},
+        "role": {"type": "string", "enum": ["admin", "guest"]}
+      },
+      "required": ["name", "role"]
+    },
+    "active": {"type": "boolean"}
+  },
+  "required": ["user"]
+}

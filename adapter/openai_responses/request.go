@@ -1,10 +1,13 @@
 package openai_responses
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
 	anthropicsdk "github.com/anthropics/anthropic-sdk-go"
+
+	"github.com/shahao/anthropify/internal/schema"
 )
 
 // BuildRequest lowers an Anthropic MessageNewParams into the JSON body
@@ -15,7 +18,15 @@ import (
 // thinking budget. More exotic features (image inputs, server-side
 // tools beyond apply_patch, structured output) are forwarded verbatim
 // when present and passed through to the upstream API.
-func BuildRequest(req anthropicsdk.MessageNewParams, stream bool) ([]byte, error) {
+//
+// ctx is consulted for the active schema.Policy via schema.PolicyFrom;
+// the default PolicyStrict makes incompatible tool input_schema fields
+// surface as ErrSchemaIncompatible instead of being silently passed
+// through and rejected by the upstream API. This fixes the latent bug
+// where convertTools used to forward the input_schema verbatim, so
+// $ref / additionalProperties:true caused opaque 400s from the
+// Responses API.
+func BuildRequest(ctx context.Context, req anthropicsdk.MessageNewParams, stream bool) ([]byte, error) {
 	raw, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("openai_responses: marshal anthropic request: %w", err)
@@ -44,7 +55,11 @@ func BuildRequest(req anthropicsdk.MessageNewParams, stream bool) ([]byte, error
 
 	// Tools.
 	if tools, ok := src["tools"].([]any); ok && len(tools) > 0 {
-		out["tools"] = convertTools(tools)
+		converted, err := convertTools(ctx, tools)
+		if err != nil {
+			return nil, err
+		}
+		out["tools"] = converted
 	}
 	if tc, ok := src["tool_choice"]; ok {
 		out["tool_choice"] = tc
@@ -186,7 +201,17 @@ func textFieldForRole(role string) string {
 }
 
 // convertTools maps Anthropic tool schemas to OpenAI function tools.
-func convertTools(tools []any) []any {
+// Each tool's input_schema is run through schema.Normalize against
+// DialectOpenAIStrict so that fields the upstream rejects
+// (e.g. $ref, additionalProperties:true under structured outputs) are
+// surfaced as ErrSchemaIncompatible under PolicyStrict (default) or
+// rewritten under PolicyLossy/PolicyBestEffort with slog.Warn breadcrumbs.
+//
+// This fixes the latent bug noted in docs/design/v0.2.0-...md §1: prior
+// versions forwarded the schema verbatim, so dialect-incompatible
+// fields produced opaque upstream 400s instead of a localised error.
+func convertTools(ctx context.Context, tools []any) ([]any, error) {
+	policy := schema.PolicyFrom(ctx)
 	out := make([]any, 0, len(tools))
 	for _, ti := range tools {
 		t, ok := ti.(map[string]any)
@@ -205,12 +230,21 @@ func convertTools(tools []any) []any {
 		if desc, _ := t["description"].(string); desc != "" {
 			fn["description"] = desc
 		}
-		if schema, ok := t["input_schema"]; ok {
-			fn["parameters"] = schema
+		if rawSchema, ok := t["input_schema"]; ok {
+			canonical, _ := rawSchema.(map[string]any)
+			normalised, _, err := schema.Normalize(ctx, canonical, schema.DialectOpenAIStrict, policy)
+			if err != nil {
+				return nil, fmt.Errorf("openai_responses: tool %q: %w", name, err)
+			}
+			if normalised != nil {
+				fn["parameters"] = normalised
+			} else {
+				fn["parameters"] = rawSchema
+			}
 		}
 		out = append(out, fn)
 	}
-	return out
+	return out, nil
 }
 
 // toJSONString serialises arbitrary content to a JSON string, matching

@@ -1,0 +1,22 @@
+{
+  "type": "object",
+  "description": "Either a person or a company shape.",
+  "anyOf": [
+    {
+      "type": "object",
+      "properties": {
+        "kind": {"type": "string", "enum": ["person"]},
+        "name": {"type": "string"}
+      },
+      "required": ["kind", "name"]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "kind": {"type": "string", "enum": ["company"]},
+        "company_name": {"type": "string"}
+      },
+      "required": ["kind", "company_name"]
+    }
+  ]
+}

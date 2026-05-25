@@ -1,0 +1,12 @@
+{
+  "type": "array",
+  "description": "List of contact records.",
+  "items": {
+    "type": "object",
+    "properties": {
+      "id": {"type": "integer", "description": "Stable identifier."},
+      "name": {"type": "string", "description": "Display name."}
+    },
+    "required": ["id", "name"]
+  }
+}

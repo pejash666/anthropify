@@ -1,6 +1,7 @@
 package gemini_native
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -661,7 +662,10 @@ func buildRequestFromRaw(raw []byte) ([]byte, error) {
 		}
 	}
 	if tools, ok := anth["tools"].([]any); ok {
-		decls := convertAnthropicToolsToGeminiFunctionDeclarations(tools)
+		decls, err := convertAnthropicToolsToGeminiFunctionDeclarations(context.Background(), tools)
+		if err != nil {
+			return nil, err
+		}
 		if len(decls) > 0 {
 			out["tools"] = []map[string]any{
 				{"functionDeclarations": decls},
@@ -711,7 +715,7 @@ func TestBuildRequest_PublicEntrypoint(t *testing.T) {
 	if err := json.Unmarshal(rawIn, &params); err != nil {
 		t.Fatalf("unmarshal params: %v", err)
 	}
-	body, err := BuildRequest(params)
+	body, err := BuildRequest(context.Background(), params)
 	if err != nil {
 		t.Fatalf("BuildRequest: %v", err)
 	}

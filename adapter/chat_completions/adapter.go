@@ -94,7 +94,7 @@ func (a *Adapter) Stream(ctx context.Context, req anthropicsdk.MessageNewParams)
 		return nil, errors.New("anthropify/chat_completions: model is required")
 	}
 
-	payload, err := BuildRequest(req, true)
+	payload, err := BuildRequest(ctx, req, true)
 	if err != nil {
 		return nil, err
 	}

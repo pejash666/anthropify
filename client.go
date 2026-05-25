@@ -13,6 +13,7 @@ import (
 	chatadapter "github.com/shahao/anthropify/adapter/chat_completions"
 	geminiadapter "github.com/shahao/anthropify/adapter/gemini_native"
 	openairesponses "github.com/shahao/anthropify/adapter/openai_responses"
+	"github.com/shahao/anthropify/internal/schema"
 )
 
 // Client is the top-level entry point. Construct one with New.
@@ -111,6 +112,7 @@ func (c *Client) CreateMessageStream(ctx context.Context, req anthropic.MessageN
 		return nil, err
 	}
 	ctx = withLogger(ctx, c.cfg.logger)
+	ctx = c.applySchemaContext(ctx)
 	ch, err := ad.Stream(ctx, req2)
 	if err != nil {
 		return nil, err
@@ -127,6 +129,7 @@ func (c *Client) CreateMessage(ctx context.Context, req anthropic.MessageNewPara
 		return nil, err
 	}
 	ctx = withLogger(ctx, c.cfg.logger)
+	ctx = c.applySchemaContext(ctx)
 	if msg, err := ad.Invoke(ctx, req2); err == nil {
 		return msg, nil
 	} else if !errors.Is(err, ErrUnsupported) {
@@ -138,6 +141,17 @@ func (c *Client) CreateMessage(ctx context.Context, req anthropic.MessageNewPara
 		return nil, err
 	}
 	return assembleFromStream(ch)
+}
+
+// applySchemaContext attaches the client-global SchemaPolicy and a
+// logger to ctx so that internal/schema.Normalize sees the right
+// values inside each adapter.
+func (c *Client) applySchemaContext(ctx context.Context) context.Context {
+	ctx = schema.WithPolicy(ctx, c.cfg.schemaPolicy)
+	if c.cfg.logger != nil {
+		ctx = schema.WithLogger(ctx, c.cfg.logger)
+	}
+	return ctx
 }
 
 // dispatch resolves the route and returns the adapter plus the

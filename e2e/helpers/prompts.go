@@ -132,6 +132,12 @@ func itoa(n int64) string {
 	return string(buf[i:])
 }
 
+// MustParams is the exported helper for tests outside this package.
+// It panics on a parse failure because callers always pass static JSON.
+func MustParams(src string) anthropic.MessageNewParams {
+	return mustParams(src)
+}
+
 func mustParams(src string) anthropic.MessageNewParams {
 	var p anthropic.MessageNewParams
 	if err := json.Unmarshal([]byte(src), &p); err != nil {

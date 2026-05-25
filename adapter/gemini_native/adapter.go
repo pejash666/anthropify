@@ -172,7 +172,7 @@ func (a *Adapter) Stream(ctx context.Context, req anthropicsdk.MessageNewParams)
 		return nil, errors.New("anthropify/gemini_native: model is required")
 	}
 
-	payload, err := BuildRequest(req)
+	payload, err := BuildRequest(ctx, req)
 	if err != nil {
 		return nil, err
 	}

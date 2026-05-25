@@ -1,12 +1,14 @@
 package gemini_native
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"sort"
 	"strings"
 
 	anthropicsdk "github.com/anthropics/anthropic-sdk-go"
+
+	"github.com/shahao/anthropify/internal/schema"
 )
 
 // BuildRequest converts an Anthropic MessageNewParams payload into a
@@ -23,7 +25,12 @@ import (
 // for the supported subset of Anthropic features (text/image content,
 // tool_use, tool_result, thinking, system, tools, max_tokens, top_p,
 // top_k, stop_sequences, thinking config).
-func BuildRequest(req anthropicsdk.MessageNewParams) ([]byte, error) {
+//
+// ctx is consulted for the active schema.Policy via schema.PolicyFrom;
+// the default PolicyStrict makes incompatible tool input_schema fields
+// (oneOf, $ref, multipleOf, etc.) surface as ErrSchemaIncompatible
+// instead of silently disappearing.
+func BuildRequest(ctx context.Context, req anthropicsdk.MessageNewParams) ([]byte, error) {
 	raw, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("anthropify/gemini_native: marshal request: %w", err)
@@ -53,7 +60,10 @@ func BuildRequest(req anthropicsdk.MessageNewParams) ([]byte, error) {
 
 	// 3. tools -> tools[0].functionDeclarations
 	if tools, ok := anth["tools"].([]any); ok {
-		decls := convertAnthropicToolsToGeminiFunctionDeclarations(tools)
+		decls, err := convertAnthropicToolsToGeminiFunctionDeclarations(ctx, tools)
+		if err != nil {
+			return nil, err
+		}
 		if len(decls) > 0 {
 			out["tools"] = []map[string]any{
 				{"functionDeclarations": decls},
@@ -354,7 +364,8 @@ func convertAnthropicMessagesToGeminiContents(messages []any, targetModel string
 	return contents
 }
 
-func convertAnthropicToolsToGeminiFunctionDeclarations(tools []any) []map[string]any {
+func convertAnthropicToolsToGeminiFunctionDeclarations(ctx context.Context, tools []any) ([]map[string]any, error) {
+	policy := schema.PolicyFrom(ctx)
 	out := make([]map[string]any, 0, len(tools))
 	for _, ti := range tools {
 		tm, ok := ti.(map[string]any)
@@ -369,122 +380,28 @@ func convertAnthropicToolsToGeminiFunctionDeclarations(tools []any) []map[string
 		if desc, _ := tm["description"].(string); desc != "" {
 			decl["description"] = desc
 		}
-		if schema, ok := tm["input_schema"].(map[string]any); ok {
-			decl["parameters"] = sanitizeSchemaForGemini(schema)
+		if rawSchema, ok := tm["input_schema"].(map[string]any); ok {
+			normalised, _, err := schema.Normalize(ctx, rawSchema, schema.DialectGemini, policy)
+			if err != nil {
+				return nil, fmt.Errorf("gemini_native: tool %q: %w", name, err)
+			}
+			decl["parameters"] = normalised
 		}
 		out = append(out, decl)
 	}
+	return out, nil
+}
+
+// sanitizeSchemaForGemini is retained as a thin wrapper around
+// schema.Normalize for backwards compatibility with existing tests; new
+// call sites should use schema.Normalize(ctx, ..., DialectGemini, ...)
+// directly so they pick up the active SchemaPolicy.
+//
+// The wrapper uses PolicyLossy so it preserves the v0.1.x silent-drop
+// behaviour the original tests assert.
+func sanitizeSchemaForGemini(in map[string]any) map[string]any {
+	out, _, _ := schema.Normalize(context.Background(), in, schema.DialectGemini, schema.PolicyLossy)
 	return out
-}
-
-// geminiSchemaAllowedKeys is the field whitelist accepted by the Gemini
-// schema validator, taken verbatim from the reference.
-var geminiSchemaAllowedKeys = map[string]bool{
-	"type":             true,
-	"format":           true,
-	"title":            true,
-	"description":      true,
-	"nullable":         true,
-	"enum":             true,
-	"maxItems":         true,
-	"minItems":         true,
-	"properties":       true,
-	"required":         true,
-	"minProperties":    true,
-	"maxProperties":    true,
-	"minLength":        true,
-	"maxLength":        true,
-	"pattern":          true,
-	"example":          true,
-	"anyOf":            true,
-	"propertyOrdering": true,
-	"default":          true,
-	"items":            true,
-	"minimum":          true,
-	"maximum":          true,
-}
-
-// sanitizeSchemaForGemini drops fields outside the whitelist, infers a
-// missing `type` from `enum` values, lowercases `type`, sorts
-// properties and required entries (improves Gemini prompt-cache hit
-// rate), and recurses into properties / items / anyOf.
-func sanitizeSchemaForGemini(schema map[string]any) map[string]any {
-	cleaned := make(map[string]any, len(schema))
-	for k, v := range schema {
-		if geminiSchemaAllowedKeys[k] {
-			cleaned[k] = v
-		}
-	}
-
-	if _, ok := cleaned["type"]; !ok {
-		if enumArr, ok := cleaned["enum"].([]any); ok && len(enumArr) > 0 {
-			switch enumArr[0].(type) {
-			case string:
-				cleaned["type"] = "string"
-			case float64, int, int64, int32:
-				cleaned["type"] = "number"
-			case bool:
-				cleaned["type"] = "boolean"
-			default:
-				cleaned["type"] = "string"
-			}
-		}
-	}
-	if t, ok := cleaned["type"].(string); ok {
-		cleaned["type"] = strings.ToLower(t)
-	}
-
-	if props, ok := cleaned["properties"].(map[string]any); ok {
-		names := make([]string, 0, len(props))
-		for n := range props {
-			names = append(names, n)
-		}
-		sort.Strings(names)
-		nps := make(map[string]any, len(props))
-		for _, n := range names {
-			if sm, ok := props[n].(map[string]any); ok {
-				nps[n] = sanitizeSchemaForGemini(sm)
-			} else {
-				nps[n] = props[n]
-			}
-		}
-		cleaned["properties"] = nps
-	}
-
-	if items, ok := cleaned["items"].(map[string]any); ok {
-		cleaned["items"] = sanitizeSchemaForGemini(items)
-	}
-
-	if anyOf, ok := cleaned["anyOf"].([]any); ok {
-		nao := make([]any, 0, len(anyOf))
-		for _, item := range anyOf {
-			if m, ok := item.(map[string]any); ok {
-				nao = append(nao, sanitizeSchemaForGemini(m))
-			} else {
-				nao = append(nao, item)
-			}
-		}
-		cleaned["anyOf"] = nao
-	}
-
-	if reqArr, ok := cleaned["required"].([]any); ok {
-		reqs := make([]string, 0, len(reqArr))
-		for _, ri := range reqArr {
-			if s, ok := ri.(string); ok {
-				reqs = append(reqs, s)
-			}
-		}
-		if len(reqs) > 0 {
-			sort.Strings(reqs)
-			cleaned["required"] = reqs
-		}
-	} else if reqs, ok := cleaned["required"].([]string); ok {
-		sorted := append([]string(nil), reqs...)
-		sort.Strings(sorted)
-		cleaned["required"] = sorted
-	}
-
-	return cleaned
 }
 
 // resolveGeminiThinkingLevel maps an Anthropic thinking budget to one

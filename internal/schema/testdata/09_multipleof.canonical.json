@@ -1,0 +1,6 @@
+{
+  "type": "object",
+  "properties": {
+    "amount": {"type": "number", "multipleOf": 0.5}
+  }
+}

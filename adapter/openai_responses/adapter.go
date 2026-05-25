@@ -60,7 +60,7 @@ func (a *Adapter) Invoke(_ context.Context, _ anthropicsdk.MessageNewParams) (*a
 // Stream issues the request and launches a goroutine that converts the
 // upstream SSE frames to Anthropic events.
 func (a *Adapter) Stream(ctx context.Context, req anthropicsdk.MessageNewParams) (<-chan adapter.RawEvent, error) {
-	payload, err := BuildRequest(req, true)
+	payload, err := BuildRequest(ctx, req, true)
 	if err != nil {
 		return nil, err
 	}

@@ -1,6 +1,7 @@
 package chat_completions
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 
@@ -54,7 +55,10 @@ func buildRequestFromRaw(raw []byte, stream bool) ([]byte, error) {
 	}
 
 	if tools, ok := anth["tools"].([]any); ok {
-		outTools := convertAnthropicTools(tools)
+		outTools, err := convertAnthropicTools(context.Background(), tools)
+		if err != nil {
+			return nil, err
+		}
 		if len(outTools) > 0 {
 			out["tools"] = outTools
 		}
@@ -337,7 +341,7 @@ func TestBuildRequest_PublicEntrypoint(t *testing.T) {
 	if err := json.Unmarshal(rawIn, &params); err != nil {
 		t.Fatalf("unmarshal params: %v", err)
 	}
-	body, err := BuildRequest(params, true)
+	body, err := BuildRequest(context.Background(), params, true)
 	if err != nil {
 		t.Fatalf("BuildRequest: %v", err)
 	}

@@ -30,6 +30,12 @@ func main() {
 			APIKey:  os.Getenv("KIMI_API_KEY"),
 		}),
 		ap.WithModelRoute("kimi-", ap.Route{Provider: ap.ProviderChatCompletions, Backend: "kimi"}),
+		// v0.2.0: Lossy lets the per-dialect normalizer rewrite the
+		// schema in documented ways (e.g. drop additionalProperties for
+		// Gemini, downgrade additionalProperties:true for OpenAI Strict)
+		// while logging each transform via slog.Warn. The default,
+		// SchemaPolicyStrict, would error on any of these downgrades.
+		ap.WithSchemaPolicy(ap.SchemaPolicyLossy),
 	)
 	if err != nil {
 		panic(err)
@@ -37,19 +43,42 @@ func main() {
 
 	// One Anthropic-shaped tool definition, reused unchanged for all four
 	// providers. Each adapter translates this into the upstream's native
-	// function-calling schema.
+	// function-calling schema. The schema deliberately exercises the
+	// v0.2.0 SchemaPolicy pipeline: a nested object, an enum, and
+	// additionalProperties:false (a no-op on Anthropic, kept verbatim on
+	// OpenAI Strict / Azure Strict, and dropped on Gemini with a warn).
 	tools := []anthropic.ToolUnionParam{
 		{OfTool: &anthropic.ToolParam{
 			Name:        "get_weather",
-			Description: anthropic.String("Look up the current weather for a given city."),
+			Description: anthropic.String("Look up the current weather for a given location."),
 			InputSchema: anthropic.ToolInputSchemaParam{
 				Properties: map[string]any{
-					"city": map[string]any{
+					"location": map[string]any{
+						"type":        "object",
+						"description": "Where to look up the weather.",
+						"properties": map[string]any{
+							"city": map[string]any{
+								"type":        "string",
+								"description": "City name, e.g. Beijing",
+							},
+							"country": map[string]any{
+								"type":        "string",
+								"description": "ISO 3166-1 alpha-2 country code.",
+							},
+						},
+						"required":             []string{"city"},
+						"additionalProperties": false,
+					},
+					"units": map[string]any{
 						"type":        "string",
-						"description": "City name, e.g. Beijing",
+						"description": "Temperature unit.",
+						"enum":        []string{"celsius", "fahrenheit"},
 					},
 				},
-				Required: []string{"city"},
+				Required: []string{"location"},
+				ExtraFields: map[string]any{
+					"additionalProperties": false,
+				},
 			},
 		}},
 	}

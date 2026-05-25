@@ -17,6 +17,7 @@ import (
 	anthropicsdk "github.com/anthropics/anthropic-sdk-go"
 
 	"github.com/shahao/anthropify/adapter"
+	"github.com/shahao/anthropify/internal/schema"
 	"github.com/shahao/anthropify/internal/ssehelper"
 )
 
@@ -61,7 +62,7 @@ func (a *Adapter) Name() string { return "anthropic:" + a.name }
 // Invoke performs a non-streaming call. It POSTs the request to
 // /v1/messages with stream=false and returns the full JSON Message.
 func (a *Adapter) Invoke(ctx context.Context, req anthropicsdk.MessageNewParams) (*anthropicsdk.Message, error) {
-	payload, err := buildPayload(req, false)
+	payload, err := buildPayload(ctx, req, false)
 	if err != nil {
 		return nil, err
 	}
@@ -91,7 +92,7 @@ func (a *Adapter) Invoke(ctx context.Context, req anthropicsdk.MessageNewParams)
 // Stream performs a streaming call. The returned channel emits each SSE
 // frame as a RawEvent and is closed when the stream ends.
 func (a *Adapter) Stream(ctx context.Context, req anthropicsdk.MessageNewParams) (<-chan adapter.RawEvent, error) {
-	payload, err := buildPayload(req, true)
+	payload, err := buildPayload(ctx, req, true)
 	if err != nil {
 		return nil, err
 	}
@@ -155,7 +156,7 @@ func (a *Adapter) newHTTPRequest(ctx context.Context, payload []byte, stream boo
 // buildPayload serialises the MessageNewParams and injects the "stream"
 // flag. We round-trip through a map because MessageNewParams is an
 // opaque union type.
-func buildPayload(req anthropicsdk.MessageNewParams, stream bool) ([]byte, error) {
+func buildPayload(ctx context.Context, req anthropicsdk.MessageNewParams, stream bool) ([]byte, error) {
 	raw, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("anthropify/anthropic: marshal request: %w", err)
@@ -168,6 +169,30 @@ func buildPayload(req anthropicsdk.MessageNewParams, stream bool) ([]byte, error
 		m["stream"] = true
 	} else {
 		delete(m, "stream")
+	}
+	// Even though the Anthropic dialect is identity, we run every
+	// tool's input_schema through schema.Normalize so the policy
+	// pipeline is uniform across adapters and so stale validation
+	// errors (cycles, depth caps) trigger here too if the dialect
+	// configuration ever tightens.
+	if tools, ok := m["tools"].([]any); ok {
+		policy := schema.PolicyFrom(ctx)
+		for i, ti := range tools {
+			tm, ok := ti.(map[string]any)
+			if !ok {
+				continue
+			}
+			if rawSchema, ok := tm["input_schema"].(map[string]any); ok {
+				normalised, _, err := schema.Normalize(ctx, rawSchema, schema.DialectAnthropic, policy)
+				if err != nil {
+					name, _ := tm["name"].(string)
+					return nil, fmt.Errorf("anthropify/anthropic: tool %q: %w", name, err)
+				}
+				tm["input_schema"] = normalised
+			}
+			tools[i] = tm
+		}
+		m["tools"] = tools
 	}
 	return json.Marshal(m)
 }

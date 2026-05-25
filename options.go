@@ -2,13 +2,42 @@ package anthropify
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
 	"strings"
 
 	geminiadapter "github.com/shahao/anthropify/adapter/gemini_native"
+	"github.com/shahao/anthropify/internal/schema"
 )
+
+// SchemaPolicy is the v0.2.0 client-global tool-schema normalisation
+// policy. The default (PolicyStrict) makes every lossy transform a
+// hard error so callers learn about silent field drops; PolicyLossy
+// performs the documented rewrites and logs them at slog.Warn;
+// PolicyBestEffort additionally tolerates the documented best-effort
+// downgrades (e.g. OpenAI Strict additionalProperties:true -> false).
+//
+// See docs/design/v0.2.0-protocol-driven-adapters.md §4.3 for the
+// authoritative behaviour table.
+type SchemaPolicy = schema.Policy
+
+// Re-exports of the underlying enum constants. See SchemaPolicy.
+const (
+	SchemaPolicyStrict     = schema.PolicyStrict
+	SchemaPolicyLossy      = schema.PolicyLossy
+	SchemaPolicyBestEffort = schema.PolicyBestEffort
+)
+
+// ErrSchemaIncompatible is returned (wrapped) by adapters when a tool's
+// input_schema cannot be losslessly converted to the upstream dialect
+// under the active SchemaPolicy. Detect with errors.Is.
+var ErrSchemaIncompatible = schema.ErrSchemaIncompatible
+
+// _ keeps errors imported unconditionally so future error helpers can
+// compile without adding the import.
+var _ = errors.Is
 
 // GeminiMode re-exports the adapter-level mode enum so callers do not
 // need to import the adapter package directly.
@@ -107,6 +136,10 @@ type config struct {
 	chatCompat  map[string]OpenAICompatConfig
 	modelRoutes map[string]Route
 	overrideFn  func(model string) (Route, bool)
+
+	// schemaPolicy controls how schema.Normalize reacts to lossy tool
+	// input_schema transforms. Default = SchemaPolicyStrict.
+	schemaPolicy SchemaPolicy
 }
 
 // Route resolves a model name to a concrete provider plus an optional
@@ -220,6 +253,17 @@ func WithModelRoute(prefix string, route Route) Option {
 // reloads).
 func WithModelOverride(fn func(model string) (Route, bool)) Option {
 	return func(c *config) { c.overrideFn = fn }
+}
+
+// WithSchemaPolicy selects the client-global tool-schema normalisation
+// policy. The default (when this option is not supplied) is
+// SchemaPolicyStrict: any non-cosmetic lossy transform returns
+// ErrSchemaIncompatible from Invoke/Stream. SchemaPolicyLossy performs
+// the documented rewrites/drops and logs each via slog.Warn;
+// SchemaPolicyBestEffort additionally tolerates the documented
+// best-effort downgrades (see schema package docs).
+func WithSchemaPolicy(p SchemaPolicy) Option {
+	return func(c *config) { c.schemaPolicy = p }
 }
 
 // defaultConfig produces a fresh config populated with library defaults.

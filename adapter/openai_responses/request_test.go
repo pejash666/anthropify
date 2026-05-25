@@ -1,6 +1,7 @@
 package openai_responses
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 
@@ -22,7 +23,7 @@ func TestBuildRequest_Basic(t *testing.T) {
 	if err := json.Unmarshal(src, &req); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	out, err := BuildRequest(req, true)
+	out, err := BuildRequest(context.Background(), req, true)
 	if err != nil {
 		t.Fatalf("BuildRequest: %v", err)
 	}
@@ -78,7 +79,7 @@ func TestBuildRequest_ToolChoiceAndTools(t *testing.T) {
 	if err := json.Unmarshal(src, &req); err != nil {
 		t.Fatal(err)
 	}
-	out, _ := BuildRequest(req, false)
+	out, _ := BuildRequest(context.Background(), req, false)
 	var got map[string]any
 	_ = json.Unmarshal(out, &got)
 	tools, ok := got["tools"].([]any)
@@ -111,7 +112,7 @@ func TestBuildRequest_Thinking(t *testing.T) {
 	if err := json.Unmarshal(src, &req); err != nil {
 		t.Fatal(err)
 	}
-	out, _ := BuildRequest(req, false)
+	out, _ := BuildRequest(context.Background(), req, false)
 	var got map[string]any
 	_ = json.Unmarshal(out, &got)
 	r, ok := got["reasoning"].(map[string]any)

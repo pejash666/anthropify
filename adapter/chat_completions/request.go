@@ -1,12 +1,14 @@
 package chat_completions
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"sort"
 	"strings"
 
 	anthropicsdk "github.com/anthropics/anthropic-sdk-go"
+
+	"github.com/shahao/anthropify/internal/schema"
 )
 
 // BuildRequest translates an Anthropic MessageNewParams into an OpenAI
@@ -27,7 +29,11 @@ import (
 // We round-trip through map[string]any rather than building OpenAI
 // SDK structs so that we do not need to take a dependency on
 // openai-go / sashabaranov/go-openai.
-func BuildRequest(req anthropicsdk.MessageNewParams, stream bool) ([]byte, error) {
+//
+// ctx is consulted for the active schema.Policy via schema.PolicyFrom;
+// the default PolicyStrict makes incompatible tool input_schema fields
+// surface as ErrSchemaIncompatible.
+func BuildRequest(ctx context.Context, req anthropicsdk.MessageNewParams, stream bool) ([]byte, error) {
 	// Convert MessageNewParams to map[string]any via JSON; the SDK
 	// types are not introspectable enough to walk directly.
 	raw, err := json.Marshal(req)
@@ -83,7 +89,10 @@ func BuildRequest(req anthropicsdk.MessageNewParams, stream bool) ([]byte, error
 
 	// Tools.
 	if tools, ok := anth["tools"].([]any); ok {
-		outTools := convertAnthropicTools(tools)
+		outTools, err := convertAnthropicTools(ctx, tools)
+		if err != nil {
+			return nil, err
+		}
 		if len(outTools) > 0 {
 			out["tools"] = outTools
 		}
@@ -425,8 +434,13 @@ func convertAnthropicMessages(anthropicMessages []any, systemContent any, model 
 	return messages
 }
 
-// convertAnthropicTools ports service/llm/converter.go:697.
-func convertAnthropicTools(anthropicTools []any) []any {
+// convertAnthropicTools ports service/llm/converter.go:697. Each
+// input_schema is run through schema.Normalize against
+// DialectAzureStrict; PolicyStrict surfaces additionalProperties:true
+// and other rejected shapes as errors so the caller learns about lossy
+// rewrites instead of having them happen silently.
+func convertAnthropicTools(ctx context.Context, anthropicTools []any) ([]any, error) {
+	policy := schema.PolicyFrom(ctx)
 	outTools := make([]any, 0, len(anthropicTools))
 	for _, ti := range anthropicTools {
 		if tm, ok := ti.(map[string]any); ok {
@@ -440,8 +454,13 @@ func convertAnthropicTools(anthropicTools []any) []any {
 
 			var parameters map[string]any
 			if v, ok := tm["input_schema"]; ok && v != nil {
-				if schema, ok := v.(map[string]any); ok && schema != nil {
-					parameters = cleanSchemaForAzure(schema)
+				if rawSchema, ok := v.(map[string]any); ok && rawSchema != nil {
+					normalised, _, err := schema.Normalize(ctx, rawSchema, schema.DialectAzureStrict, policy)
+					if err != nil {
+						name, _ := tm["name"].(string)
+						return nil, fmt.Errorf("chat_completions: tool %q: %w", name, err)
+					}
+					parameters = normalised
 				}
 			}
 			if parameters == nil {
@@ -454,81 +473,19 @@ func convertAnthropicTools(anthropicTools []any) []any {
 			outTools = append(outTools, map[string]any{"type": "function", "function": fn})
 		}
 	}
-	return outTools
+	return outTools, nil
 }
 
-// cleanSchemaForAzure recursively normalises a JSON schema so it is
-// accepted by Azure / OpenAI-compatible providers. Mirrors the SoT at
-// service/llm/converter.go:736.
-func cleanSchemaForAzure(schema map[string]any) map[string]any {
-	cleaned := make(map[string]any)
-	for key, value := range schema {
-		switch key {
-		case "type":
-			if typeValue, ok := value.(string); ok {
-				cleaned[key] = strings.ToLower(typeValue)
-			} else {
-				cleaned[key] = value
-			}
-		case "additionalProperties":
-			if value == nil {
-				cleaned[key] = false
-			} else {
-				cleaned[key] = value
-			}
-		case "$schema":
-			// drop
-			continue
-		case "properties":
-			if props, ok := value.(map[string]any); ok {
-				names := make([]string, 0, len(props))
-				for n := range props {
-					names = append(names, n)
-				}
-				sort.Strings(names)
-				cleanedProps := make(map[string]any)
-				for _, n := range names {
-					if sm, ok := props[n].(map[string]any); ok {
-						cleanedProps[n] = cleanSchemaForAzure(sm)
-					} else {
-						cleanedProps[n] = props[n]
-					}
-				}
-				cleaned[key] = cleanedProps
-			} else {
-				cleaned[key] = value
-			}
-		case "items":
-			if itemSchema, ok := value.(map[string]any); ok {
-				cleaned[key] = cleanSchemaForAzure(itemSchema)
-			} else {
-				cleaned[key] = value
-			}
-		case "required":
-			if reqArray, ok := value.([]any); ok {
-				reqStrings := make([]string, 0, len(reqArray))
-				for _, ri := range reqArray {
-					if name, ok := ri.(string); ok {
-						reqStrings = append(reqStrings, name)
-					}
-				}
-				if len(reqStrings) > 0 {
-					sort.Strings(reqStrings)
-					cleaned[key] = reqStrings
-				}
-			} else if reqStrings, ok := value.([]string); ok {
-				sorted := make([]string, len(reqStrings))
-				copy(sorted, reqStrings)
-				sort.Strings(sorted)
-				cleaned[key] = sorted
-			} else {
-				cleaned[key] = value
-			}
-		default:
-			cleaned[key] = value
-		}
-	}
-	return cleaned
+// cleanSchemaForAzure is retained as a thin wrapper around
+// schema.Normalize for backwards compatibility. New call sites should
+// invoke schema.Normalize(ctx, ..., DialectAzureStrict, policy)
+// directly so they pick up the active SchemaPolicy.
+//
+// The wrapper uses PolicyLossy so it preserves the v0.1.x silent-rewrite
+// behaviour the existing tests assert.
+func cleanSchemaForAzure(in map[string]any) map[string]any {
+	out, _, _ := schema.Normalize(context.Background(), in, schema.DialectAzureStrict, schema.PolicyLossy)
+	return out
 }
 
 // convertToolChoice ports service/llm/converter.go:853.

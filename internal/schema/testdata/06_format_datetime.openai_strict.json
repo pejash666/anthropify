@@ -1,0 +1,7 @@
+{
+  "type": "object",
+  "properties": {
+    "occurred_at": {"type": "string", "format": "date-time"}
+  },
+  "required": ["occurred_at"]
+}
