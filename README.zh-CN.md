@@ -130,6 +130,11 @@ for _, t := range turns {
 > （`gemini-3-pro-preview`、`gemini-3.1-pro-preview`）需要 Google
 > 显式 preview 准入，开箱即用拿不到。
 
+已在 `gemini-3.5-flash`、`gemini-3.1-pro-preview`、`gemini-3-pro-preview`、
+`gemini-pro-latest` 上实测 thinking 功能——四个 model 都返回 canonical
+thinking blocks，并支持 `thoughtSignature` 跨轮回放（前提：AI Studio
+project 已开启 billing）。
+
 只有 Anthropic adapter 直接暴露原生非流式接口。其他 provider 在调用
 `CreateMessage` 时，会打开流并由库内部把 content block 组装成最终的
 `*anthropic.Message`。

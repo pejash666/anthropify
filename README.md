@@ -136,6 +136,11 @@ adopts it as the canonical form and normalises every provider into it.
 > (`gemini-3-pro-preview`, `gemini-3.1-pro-preview`) require explicit
 > Google preview enrolment and are not assumed available out of the box.
 
+Tested with thinking on `gemini-3.5-flash`, `gemini-3.1-pro-preview`,
+`gemini-3-pro-preview`, and `gemini-pro-latest` — all four return
+canonical thinking blocks with `thoughtSignature` round-trip on AI
+Studio billing-enabled projects.
+
 Only the Anthropic adapter exposes a real non-streaming endpoint. For every
 other provider, `CreateMessage` opens the stream and assembles the final
 `*anthropic.Message` from content blocks.
