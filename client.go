@@ -55,6 +55,26 @@ func New(opts ...Option) (*Client, error) {
 		cli.anthropics[name] = a
 	}
 
+	for name, bc := range cfg.anthropicBedrock {
+		if _, dup := cli.anthropics[name]; dup {
+			return nil, fmt.Errorf("anthropify: anthropic backend name %q is registered as both a Direct and a Bedrock backend; pick distinct names", name)
+		}
+		a, err := anthropicadapter.New(name, anthropicadapter.Config{
+			Mode:               anthropicadapter.AnthropicModeBedrock,
+			AWSAccessKeyID:     bc.AccessKeyID,
+			AWSSecretAccessKey: bc.SecretAccessKey,
+			AWSSessionToken:    bc.SessionToken,
+			AWSRegion:          bc.Region,
+			BaseURL:            bc.BaseURL,
+			ExtraHeaders:       bc.ExtraHeaders,
+			HTTPClient:         cfg.httpClient,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("anthropify: anthropic[%s] bedrock adapter: %w", name, err)
+		}
+		cli.anthropics[name] = a
+	}
+
 	for name, oc := range cfg.openaiResponsesCompat {
 		a, err := openairesponses.New(name, openairesponses.Config{
 			APIKey:       oc.APIKey,

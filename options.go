@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 
+	anthropicadapter "github.com/shahao/anthropify/adapter/anthropic"
 	geminiadapter "github.com/shahao/anthropify/adapter/gemini_native"
 	"github.com/shahao/anthropify/internal/schema"
 )
@@ -50,6 +51,19 @@ const (
 	GeminiModeStudio  = geminiadapter.GeminiModeStudio
 	GeminiModeExpress = geminiadapter.GeminiModeExpress
 	GeminiModeVertex  = geminiadapter.GeminiModeVertex
+)
+
+// AnthropicMode re-exports the adapter-level mode enum. The zero
+// value (AnthropicModeDirect) preserves v0.1.x behaviour; users do
+// not normally interact with this type — WithAnthropic /
+// WithAnthropicCompat default to Direct, and WithAnthropicBedrock
+// selects Bedrock internally.
+type AnthropicMode = anthropicadapter.AnthropicMode
+
+// Re-exported Anthropic mode constants.
+const (
+	AnthropicModeDirect  = anthropicadapter.AnthropicModeDirect
+	AnthropicModeBedrock = anthropicadapter.AnthropicModeBedrock
 )
 
 // OpenAIResponsesConfig configures the OpenAI Responses adapter
@@ -130,6 +144,36 @@ type AnthropicConfig struct {
 	ExtraHeaders http.Header
 }
 
+// BedrockConfig configures an AWS Bedrock backend that speaks the
+// Anthropic protocol. Registered via WithAnthropicBedrock; multiple
+// backends may be registered under distinct names. Behind the scenes
+// requests dispatch through anthropic-sdk-go's bedrock subpackage,
+// which handles SigV4 signing, URL rewriting, anthropic_version body
+// injection, "anthropic-beta" header to body translation, and AWS
+// event-stream decoding. See docs/design/v0.2.0-aws-bedrock.md for
+// the full division of responsibilities.
+type BedrockConfig struct {
+	// AccessKeyID is the AWS access key ID. Required.
+	AccessKeyID string
+	// SecretAccessKey is the AWS secret access key. Required.
+	SecretAccessKey string
+	// SessionToken is optional and only used for STS-vended / SSO
+	// temporary credentials. Leave empty for long-lived IAM-user keys.
+	SessionToken string
+	// Region is the AWS region of the Bedrock runtime endpoint, e.g.
+	// "us-east-1". Required.
+	Region string
+	// BaseURL overrides the default
+	// https://bedrock-runtime.<region>.amazonaws.com host. Intended
+	// for tests pointing at httptest.NewServer; production callers
+	// should leave it empty.
+	BaseURL string
+	// ExtraHeaders is merged onto every request before the SDK's
+	// bedrock middleware runs. Set "anthropic-beta" here to get the
+	// SDK's automatic header-to-body translation.
+	ExtraHeaders http.Header
+}
+
 // GeminiConfig configures the Gemini Vertex streamGenerateContent adapter.
 type GeminiConfig struct {
 	// Mode selects between Auto (heuristic), Studio, Express, and
@@ -176,6 +220,7 @@ type config struct {
 	// Multi-backend protocol adapters. Each map keys a backend name
 	// (e.g. "anthropic", "minimax") to its per-backend config.
 	anthropicCompat       map[string]AnthropicConfig
+	anthropicBedrock      map[string]BedrockConfig
 	openaiResponsesCompat map[string]OpenAIResponsesConfig
 	azureOpenAI           map[string]AzureOpenAIConfig
 
@@ -263,6 +308,42 @@ func WithOpenAI(cfg OpenAIResponsesConfig) Option {
 // WithAnthropicCompat("anthropic", cfg).
 func WithAnthropic(cfg AnthropicConfig) Option {
 	return WithAnthropicCompat("anthropic", cfg)
+}
+
+// WithAnthropicBedrock registers an AWS Bedrock backend under the
+// given name. Multiple calls accumulate; the name is used as the
+// Route.Backend value, exactly like WithAnthropicCompat. Bedrock
+// requires per-account model identifiers (e.g.
+// "anthropic.claude-opus-4-5-20250929-v1:0" or an inference-profile
+// ARN), so the typical usage pairs this option with WithModelRoute:
+//
+//	ap.WithAnthropicBedrock("bedrock", ap.BedrockConfig{
+//	    AccessKeyID:     os.Getenv("AWS_ACCESS_KEY_ID"),
+//	    SecretAccessKey: os.Getenv("AWS_SECRET_ACCESS_KEY"),
+//	    Region:          "us-east-1",
+//	}),
+//	ap.WithModelRoute("claude-opus-4-5", ap.Route{
+//	    Provider:      ap.ProviderAnthropic,
+//	    Backend:       "bedrock",
+//	    UpstreamModel: "anthropic.claude-opus-4-5-20250929-v1:0",
+//	}),
+//
+// Anthropify intentionally ships no built-in model-ID mapping table —
+// inference-profile ARNs are account-scoped, so Route.UpstreamModel
+// remains the single authoritative hook.
+//
+// All Bedrock-specific concerns (SigV4 signing, URL path rewrite,
+// anthropic_version body injection, anthropic-beta header to body
+// translation, AWS event-stream decoding) are delegated to
+// anthropic-sdk-go's bedrock subpackage. See
+// docs/design/v0.2.0-aws-bedrock.md for the full design.
+func WithAnthropicBedrock(name string, cfg BedrockConfig) Option {
+	return func(c *config) {
+		if c.anthropicBedrock == nil {
+			c.anthropicBedrock = make(map[string]BedrockConfig)
+		}
+		c.anthropicBedrock[name] = cfg
+	}
 }
 
 // WithAzureOpenAI registers an Azure OpenAI Responses backend under
@@ -354,6 +435,7 @@ func defaultConfig() *config {
 		httpClient:            http.DefaultClient,
 		logger:                newNopLogger(),
 		anthropicCompat:       make(map[string]AnthropicConfig),
+		anthropicBedrock:      make(map[string]BedrockConfig),
 		openaiResponsesCompat: make(map[string]OpenAIResponsesConfig),
 		azureOpenAI:           make(map[string]AzureOpenAIConfig),
 		chatCompat:            make(map[string]OpenAICompatConfig),

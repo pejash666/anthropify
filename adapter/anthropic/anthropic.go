@@ -21,26 +21,71 @@ import (
 	"github.com/shahao/anthropify/internal/ssehelper"
 )
 
-// Config captures the subset of AnthropicConfig that the adapter cares
-// about. All fields mirror the top-level option type.
+// AnthropicMode selects which upstream the adapter dispatches to. The
+// zero value (AnthropicModeDirect) preserves v0.1.x behaviour: the
+// adapter speaks raw HTTPS to api.anthropic.com (or any
+// AnthropicConfig.BaseURL such as MiniMax). AnthropicModeBedrock
+// switches to a delegated path through anthropic-sdk-go's bedrock
+// subpackage, which handles SigV4 signing, URL rewriting,
+// anthropic_version body injection, anthropic-beta header to body
+// translation, and AWS event-stream decoding. Set internally by the
+// top-level WithAnthropicBedrock option; not a public knob users
+// toggle on AnthropicConfig.
+type AnthropicMode int
+
+const (
+	// AnthropicModeDirect speaks raw HTTPS to an Anthropic-protocol
+	// endpoint (api.anthropic.com, MiniMax, or any drop-in compat
+	// host). This is the zero value and matches legacy behaviour.
+	AnthropicModeDirect AnthropicMode = iota
+	// AnthropicModeBedrock dispatches through anthropic-sdk-go's
+	// bedrock subpackage; AWS-flavoured fields on Config are required.
+	AnthropicModeBedrock
+)
+
+// Config captures the subset of AnthropicConfig (plus Bedrock-only
+// extensions) that the adapter cares about.
 type Config struct {
+	// Mode selects between Direct (zero value, used for both Anthropic
+	// Inc. and any drop-in compat host such as MiniMax) and Bedrock.
+	Mode AnthropicMode
+
+	// Direct-mode fields. Required when Mode == AnthropicModeDirect.
 	APIKey       string
 	BaseURL      string
 	Version      string
 	ExtraHeaders http.Header
 	HTTPClient   *http.Client
+
+	// Bedrock-mode fields. Required when Mode == AnthropicModeBedrock.
+	AWSAccessKeyID     string
+	AWSSecretAccessKey string
+	AWSSessionToken    string // optional; only for STS / SSO temporary credentials
+	AWSRegion          string
 }
 
-// Adapter forwards requests to the Anthropic Messages API.
+// Adapter forwards requests to the Anthropic Messages API. When
+// cfg.Mode == AnthropicModeBedrock, requests are routed through an
+// anthropic-sdk-go client wired with bedrock.WithConfig; otherwise
+// requests are sent as raw HTTPS to cfg.BaseURL.
 type Adapter struct {
 	name string
 	cfg  Config
+
+	// bedrockClient is non-nil iff cfg.Mode == AnthropicModeBedrock.
+	// It is the SDK client wired through bedrock.WithConfig that
+	// handles SigV4 + URL rewrite + body injection + event-stream
+	// decoding. See bedrock.go for construction details.
+	bedrockClient *anthropicsdk.Client
 }
 
 // New constructs an Adapter and validates required fields. The name
-// labels the configured backend (e.g. "anthropic", "minimax") and is
-// surfaced via Adapter.Name as "anthropic:<name>".
+// labels the configured backend (e.g. "anthropic", "minimax",
+// "bedrock") and is surfaced via Adapter.Name as "anthropic:<name>".
 func New(name string, cfg Config) (*Adapter, error) {
+	if cfg.Mode == AnthropicModeBedrock {
+		return newBedrock(name, cfg)
+	}
 	if cfg.APIKey == "" {
 		return nil, errors.New("anthropify/anthropic: APIKey is required")
 	}
@@ -61,7 +106,11 @@ func (a *Adapter) Name() string { return "anthropic:" + a.name }
 
 // Invoke performs a non-streaming call. It POSTs the request to
 // /v1/messages with stream=false and returns the full JSON Message.
+// In Bedrock mode the SDK rewrites the URL and signs the request.
 func (a *Adapter) Invoke(ctx context.Context, req anthropicsdk.MessageNewParams) (*anthropicsdk.Message, error) {
+	if a.cfg.Mode == AnthropicModeBedrock {
+		return a.invokeBedrock(ctx, req)
+	}
 	payload, err := buildPayload(ctx, req, false)
 	if err != nil {
 		return nil, err
@@ -90,8 +139,13 @@ func (a *Adapter) Invoke(ctx context.Context, req anthropicsdk.MessageNewParams)
 }
 
 // Stream performs a streaming call. The returned channel emits each SSE
-// frame as a RawEvent and is closed when the stream ends.
+// frame as a RawEvent and is closed when the stream ends. In Bedrock
+// mode the SDK decodes AWS event-stream frames back into canonical
+// Anthropic SSE event JSON before they reach the channel.
 func (a *Adapter) Stream(ctx context.Context, req anthropicsdk.MessageNewParams) (<-chan adapter.RawEvent, error) {
+	if a.cfg.Mode == AnthropicModeBedrock {
+		return a.streamBedrock(ctx, req)
+	}
 	payload, err := buildPayload(ctx, req, true)
 	if err != nil {
 		return nil, err
