@@ -19,10 +19,10 @@ import (
 type Client struct {
 	cfg *config
 
-	anthropic adapter.Adapter
-	openai    adapter.Adapter
-	gemini    adapter.Adapter
-	chats     map[string]adapter.Adapter
+	anthropics map[string]adapter.Adapter
+	openais    map[string]adapter.Adapter
+	gemini     adapter.Adapter
+	chats      map[string]adapter.Adapter
 }
 
 // New constructs a Client and pre-creates each enabled adapter so that
@@ -33,35 +33,40 @@ func New(opts ...Option) (*Client, error) {
 		o(cfg)
 	}
 
-	cli := &Client{cfg: cfg, chats: make(map[string]adapter.Adapter)}
-
-	if cfg.anthropic != nil {
-		a, err := anthropicadapter.New(anthropicadapter.Config{
-			APIKey:       cfg.anthropic.APIKey,
-			BaseURL:      cfg.anthropic.BaseURL,
-			Version:      cfg.anthropic.Version,
-			ExtraHeaders: cfg.anthropic.ExtraHeaders,
-			HTTPClient:   cfg.httpClient,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("anthropify: anthropic adapter: %w", err)
-		}
-		cli.anthropic = a
+	cli := &Client{
+		cfg:        cfg,
+		anthropics: make(map[string]adapter.Adapter),
+		openais:    make(map[string]adapter.Adapter),
+		chats:      make(map[string]adapter.Adapter),
 	}
 
-	if cfg.openai != nil {
-		a, err := openairesponses.New(openairesponses.Config{
-			APIKey:       cfg.openai.APIKey,
-			BaseURL:      cfg.openai.BaseURL,
-			Organization: cfg.openai.Organization,
-			Project:      cfg.openai.Project,
-			ExtraHeaders: cfg.openai.ExtraHeaders,
+	for name, ac := range cfg.anthropicCompat {
+		a, err := anthropicadapter.New(name, anthropicadapter.Config{
+			APIKey:       ac.APIKey,
+			BaseURL:      ac.BaseURL,
+			Version:      ac.Version,
+			ExtraHeaders: ac.ExtraHeaders,
 			HTTPClient:   cfg.httpClient,
 		})
 		if err != nil {
-			return nil, fmt.Errorf("anthropify: openai_responses adapter: %w", err)
+			return nil, fmt.Errorf("anthropify: anthropic[%s] adapter: %w", name, err)
 		}
-		cli.openai = a
+		cli.anthropics[name] = a
+	}
+
+	for name, oc := range cfg.openaiResponsesCompat {
+		a, err := openairesponses.New(name, openairesponses.Config{
+			APIKey:       oc.APIKey,
+			BaseURL:      oc.BaseURL,
+			Organization: oc.Organization,
+			Project:      oc.Project,
+			ExtraHeaders: oc.ExtraHeaders,
+			HTTPClient:   cfg.httpClient,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("anthropify: openai_responses[%s] adapter: %w", name, err)
+		}
+		cli.openais[name] = a
 	}
 
 	if cfg.gemini != nil {
@@ -147,15 +152,25 @@ func (c *Client) dispatch(req anthropic.MessageNewParams) (adapter.Adapter, anth
 	}
 	switch route.Provider {
 	case ProviderAnthropic:
-		if c.anthropic == nil {
-			return nil, req, fmt.Errorf("%w: anthropic", ErrProviderNotConfigured)
+		backend := route.Backend
+		if backend == "" {
+			backend = "anthropic"
 		}
-		return c.anthropic, req, nil
+		a, ok := c.anthropics[backend]
+		if !ok {
+			return nil, req, fmt.Errorf("%w: anthropic[%s]", ErrProviderNotConfigured, backend)
+		}
+		return a, req, nil
 	case ProviderOpenAIResponses:
-		if c.openai == nil {
-			return nil, req, fmt.Errorf("%w: openai_responses", ErrProviderNotConfigured)
+		backend := route.Backend
+		if backend == "" {
+			backend = "openai"
 		}
-		return c.openai, req, nil
+		a, ok := c.openais[backend]
+		if !ok {
+			return nil, req, fmt.Errorf("%w: openai_responses[%s]", ErrProviderNotConfigured, backend)
+		}
+		return a, req, nil
 	case ProviderGeminiNative:
 		if c.gemini == nil {
 			return nil, req, fmt.Errorf("%w: gemini_native", ErrProviderNotConfigured)

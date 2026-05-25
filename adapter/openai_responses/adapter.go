@@ -28,11 +28,14 @@ type Config struct {
 // Adapter drives the OpenAI /v1/responses endpoint and rewrites its SSE
 // stream as Anthropic events.
 type Adapter struct {
-	cfg Config
+	name string
+	cfg  Config
 }
 
-// New validates cfg and returns a ready-to-use Adapter.
-func New(cfg Config) (*Adapter, error) {
+// New validates cfg and returns a ready-to-use Adapter labelled with
+// the given name. The label (e.g. "openai") is surfaced via
+// Adapter.Name as "openai_responses:<name>".
+func New(name string, cfg Config) (*Adapter, error) {
 	if cfg.APIKey == "" {
 		return nil, errors.New("anthropify/openai_responses: APIKey is required")
 	}
@@ -42,11 +45,11 @@ func New(cfg Config) (*Adapter, error) {
 	if cfg.HTTPClient == nil {
 		cfg.HTTPClient = http.DefaultClient
 	}
-	return &Adapter{cfg: cfg}, nil
+	return &Adapter{name: name, cfg: cfg}, nil
 }
 
-// Name satisfies adapter.Adapter.
-func (a *Adapter) Name() string { return "openai_responses" }
+// Name satisfies adapter.Adapter and identifies the configured backend.
+func (a *Adapter) Name() string { return "openai_responses:" + a.name }
 
 // Invoke returns ErrUnsupported; the outer Client drains Stream() for
 // non-streaming calls. A native path may be added later.

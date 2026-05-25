@@ -23,8 +23,11 @@ const (
 	GeminiModeVertex  = geminiadapter.GeminiModeVertex
 )
 
-// OpenAIConfig configures the OpenAI Responses adapter (GPT-5 family).
-type OpenAIConfig struct {
+// OpenAIResponsesConfig configures the OpenAI Responses adapter
+// (GPT-5 family). Multiple backends may be registered under distinct
+// names via WithOpenAIResponsesCompat; the legacy WithOpenAI is sugar
+// for the default-named "openai" slot.
+type OpenAIResponsesConfig struct {
 	// APIKey is the Bearer token used when calling the upstream.
 	APIKey string
 	// BaseURL overrides the default https://api.openai.com endpoint.
@@ -37,6 +40,10 @@ type OpenAIConfig struct {
 	// ExtraHeaders is merged into every request.
 	ExtraHeaders http.Header
 }
+
+// OpenAIConfig is the legacy alias for OpenAIResponsesConfig retained
+// for source compatibility with v0.1.x callers.
+type OpenAIConfig = OpenAIResponsesConfig
 
 // AnthropicConfig configures the Anthropic passthrough adapter.
 type AnthropicConfig struct {
@@ -89,9 +96,14 @@ type config struct {
 	httpClient *http.Client
 	logger     *slog.Logger
 
-	openai      *OpenAIConfig
-	anthropic   *AnthropicConfig
-	gemini      *GeminiConfig
+	// Multi-backend protocol adapters. Each map keys a backend name
+	// (e.g. "anthropic", "minimax") to its per-backend config.
+	anthropicCompat       map[string]AnthropicConfig
+	openaiResponsesCompat map[string]OpenAIResponsesConfig
+
+	// Single-instance (Track D — stays single in v0.2.0).
+	gemini *GeminiConfig
+
 	chatCompat  map[string]OpenAICompatConfig
 	modelRoutes map[string]Route
 	overrideFn  func(model string) (Route, bool)
@@ -101,8 +113,11 @@ type config struct {
 // remapped model string forwarded upstream.
 type Route struct {
 	Provider ProviderKind
-	// Backend is the key used for chat_completions (e.g. "kimi");
-	// ignored for other providers.
+	// Backend selects which named backend handles the request.
+	// Meaningful for ProviderAnthropic, ProviderOpenAIResponses, and
+	// ProviderChatCompletions. An empty value defaults to "anthropic"
+	// for ProviderAnthropic and "openai" for ProviderOpenAIResponses;
+	// ignored for ProviderGeminiNative.
 	Backend string
 	// UpstreamModel, if non-empty, replaces req.Model before dispatch.
 	UpstreamModel string
@@ -120,20 +135,52 @@ func WithLogger(l *slog.Logger) Option {
 	return func(c *config) { c.logger = l }
 }
 
-// WithOpenAI enables the OpenAI Responses adapter.
-func WithOpenAI(cfg OpenAIConfig) Option {
+// WithAnthropicCompat registers an Anthropic-protocol backend under the
+// given name. Multiple calls accumulate; the name is used as the
+// Route.Backend value. To address this backend, add a prefix rule via
+// WithModelRoute, e.g.
+//
+//	ap.WithModelRoute("MiniMax-",
+//	    ap.Route{Provider: ap.ProviderAnthropic, Backend: "minimax"})
+//
+// The reserved name "anthropic" is the default-named slot used by the
+// built-in claude-* prefix routes; WithAnthropic is sugar for
+// WithAnthropicCompat("anthropic", cfg).
+func WithAnthropicCompat(name string, cfg AnthropicConfig) Option {
 	return func(c *config) {
-		cfgCopy := cfg
-		c.openai = &cfgCopy
+		if c.anthropicCompat == nil {
+			c.anthropicCompat = make(map[string]AnthropicConfig)
+		}
+		c.anthropicCompat[name] = cfg
 	}
 }
 
-// WithAnthropic enables the Anthropic passthrough adapter.
-func WithAnthropic(cfg AnthropicConfig) Option {
+// WithOpenAIResponsesCompat registers an OpenAI Responses-protocol
+// backend under the given name. Multiple calls accumulate; the name is
+// used as the Route.Backend value. The reserved name "openai" is the
+// default-named slot used by the built-in gpt-/o1-/o3- prefix routes;
+// WithOpenAI is sugar for WithOpenAIResponsesCompat("openai", cfg).
+func WithOpenAIResponsesCompat(name string, cfg OpenAIResponsesConfig) Option {
 	return func(c *config) {
-		cfgCopy := cfg
-		c.anthropic = &cfgCopy
+		if c.openaiResponsesCompat == nil {
+			c.openaiResponsesCompat = make(map[string]OpenAIResponsesConfig)
+		}
+		c.openaiResponsesCompat[name] = cfg
 	}
+}
+
+// WithOpenAI enables the OpenAI Responses adapter under the default
+// "openai" backend slot. Equivalent to
+// WithOpenAIResponsesCompat("openai", cfg).
+func WithOpenAI(cfg OpenAIResponsesConfig) Option {
+	return WithOpenAIResponsesCompat("openai", cfg)
+}
+
+// WithAnthropic enables the Anthropic passthrough adapter under the
+// default "anthropic" backend slot. Equivalent to
+// WithAnthropicCompat("anthropic", cfg).
+func WithAnthropic(cfg AnthropicConfig) Option {
+	return WithAnthropicCompat("anthropic", cfg)
 }
 
 // WithGemini enables the Gemini native adapter.
@@ -178,9 +225,11 @@ func WithModelOverride(fn func(model string) (Route, bool)) Option {
 // defaultConfig produces a fresh config populated with library defaults.
 func defaultConfig() *config {
 	return &config{
-		httpClient: http.DefaultClient,
-		logger:     newNopLogger(),
-		chatCompat: make(map[string]OpenAICompatConfig),
+		httpClient:            http.DefaultClient,
+		logger:                newNopLogger(),
+		anthropicCompat:       make(map[string]AnthropicConfig),
+		openaiResponsesCompat: make(map[string]OpenAIResponsesConfig),
+		chatCompat:            make(map[string]OpenAICompatConfig),
 		modelRoutes: map[string]Route{
 			"claude-": {Provider: ProviderAnthropic},
 			"gpt-":    {Provider: ProviderOpenAIResponses},

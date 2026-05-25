@@ -32,11 +32,14 @@ type Config struct {
 
 // Adapter forwards requests to the Anthropic Messages API.
 type Adapter struct {
-	cfg Config
+	name string
+	cfg  Config
 }
 
-// New constructs an Adapter and validates required fields.
-func New(cfg Config) (*Adapter, error) {
+// New constructs an Adapter and validates required fields. The name
+// labels the configured backend (e.g. "anthropic", "minimax") and is
+// surfaced via Adapter.Name as "anthropic:<name>".
+func New(name string, cfg Config) (*Adapter, error) {
 	if cfg.APIKey == "" {
 		return nil, errors.New("anthropify/anthropic: APIKey is required")
 	}
@@ -49,11 +52,11 @@ func New(cfg Config) (*Adapter, error) {
 	if cfg.HTTPClient == nil {
 		cfg.HTTPClient = http.DefaultClient
 	}
-	return &Adapter{cfg: cfg}, nil
+	return &Adapter{name: name, cfg: cfg}, nil
 }
 
-// Name satisfies adapter.Adapter.
-func (a *Adapter) Name() string { return "anthropic" }
+// Name satisfies adapter.Adapter and identifies the configured backend.
+func (a *Adapter) Name() string { return "anthropic:" + a.name }
 
 // Invoke performs a non-streaming call. It POSTs the request to
 // /v1/messages with stream=false and returns the full JSON Message.

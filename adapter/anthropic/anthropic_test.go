@@ -26,7 +26,7 @@ func TestAdapter_Invoke(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	a, err := New(Config{APIKey: "secret", BaseURL: srv.URL})
+	a, err := New("anthropic", Config{APIKey: "secret", BaseURL: srv.URL})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +67,7 @@ func TestAdapter_Stream(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	a, err := New(Config{APIKey: "s", BaseURL: srv.URL})
+	a, err := New("anthropic", Config{APIKey: "s", BaseURL: srv.URL})
 	if err != nil {
 		t.Fatal(err)
 	}
