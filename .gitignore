@@ -2,6 +2,13 @@
 .env.e2e
 !.env.e2e.example
 
+# Generic secret files. Never commit.
+.env
+.env.*
+!.env.e2e.example
+*.key
+*.pem
+
 # Recorded SSE fixtures from real provider calls. Replayable artifacts
 # (hand-curated) live in testdata/fixtures/, but anything under
 # recorded/ is byte-for-byte from a live API and must stay local.
