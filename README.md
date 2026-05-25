@@ -124,6 +124,7 @@ adopts it as the canonical form and normalises every provider into it.
 |-------------------|-----------|------------------------|----------|-------------------|---------------|
 | Anthropic         | yes       | native                 | yes      | yes               | top-level + per-block |
 | OpenAI Responses  | yes       | drain-and-assemble     | yes      | yes (reasoning)   | server auto   |
+| Azure OpenAI      | yes       | drain-and-assemble     | yes      | yes (reasoning)   | server auto   |
 | Gemini Native     | yes       | drain-and-assemble     | yes      | yes               | server auto   |
 | Kimi (Moonshot)   | yes       | drain-and-assemble     | yes      | yes               | server auto   |
 | GLM (Zhipu)       | yes       | drain-and-assemble     | yes      | model-dependent   | server auto   |
@@ -137,6 +138,17 @@ adopts it as the canonical form and normalises every provider into it.
 > [example 07](./examples/07-anthropic-compat) for the registration
 > pattern (`WithAnthropicCompat("minimax", …)` +
 > `WithModelRoute("MiniMax-", …)`).
+
+> **Azure OpenAI** is the second backend on the OpenAI Responses
+> protocol family. Internally rides on the same
+> `adapter/openai_responses` code path as vanilla OpenAI; only URL
+> composition (deployment-bound vs deployment-less, auto-picked) and
+> auth headers (both `api-key` and `Authorization: Bearer` are sent
+> for robustness against APIM gateways and Entra/AAD tokens) differ.
+> Register with `WithAzureOpenAI` and pin a deployment via
+> `AzureOpenAIConfig.Deployment` (or leave empty and let the body's
+> model field carry the deployment name). See the [Azure OpenAI
+> integration](#azure-openai-integration) section below.
 
 > Anthropify recommends `gemini-3.5-flash` (or any Gemini 3.x flash
 > variant). The adapter emits `thinkingLevel` in
@@ -182,6 +194,84 @@ ap.WithModelRoute("MiniMax-", ap.Route{
 The two backends share one adapter and one routing table — see
 [example 07](./examples/07-anthropic-compat) for the full demo.
 
+## Azure OpenAI integration
+
+Azure OpenAI is the second backend on the OpenAI Responses-protocol
+family. Anthropify routes Azure traffic through the same
+`adapter/openai_responses` code path as vanilla OpenAI — the
+canonical `BuildRequest` and the SSE → Anthropic event converter are
+shared verbatim. Only two things differ at the network boundary:
+
+- **URL composition.** Azure exposes Responses under
+  `<resource>/openai/responses?api-version=…` (deployment-less) or
+  `<resource>/openai/deployments/<deployment>/responses?api-version=…`
+  (deployment-bound). Anthropify auto-picks based on whether
+  `AzureOpenAIConfig.Deployment` is set.
+- **Authentication.** Azure historically uses an `api-key` header for
+  resource keys; Entra/AAD access tokens use `Authorization: Bearer`;
+  APIM gateways may strip one or the other. Anthropify sends *both*
+  on every request so a single `APIKey` value works regardless of
+  whether you supplied a resource key or an AAD token.
+
+Register Azure under any backend name and route specific model
+prefixes (or exact model names) at it via the standard
+`WithModelRoute` machinery. The typical pattern is one
+`WithAzureOpenAI(...)` per Azure deployment plus an explicit
+`WithModelRoute` so callers keep using canonical short model names:
+
+```go
+client, err := ap.New(
+    ap.WithAzureOpenAI("azure", ap.AzureOpenAIConfig{
+        BaseURL:    "https://my-resource.openai.azure.com",
+        APIKey:     os.Getenv("AZURE_OPENAI_API_KEY"),
+        APIVersion: "2025-03-01-preview",
+        Deployment: "gpt-5-deployment",
+    }),
+    ap.WithModelRoute("gpt-5", ap.Route{
+        Provider: ap.ProviderOpenAIResponses,
+        Backend:  "azure",
+    }),
+)
+if err != nil {
+    log.Fatal(err)
+}
+
+req := anthropic.MessageNewParams{
+    Model:     "gpt-5", // canonical short name
+    MaxTokens: 1024,
+    Messages: []anthropic.MessageParam{
+        anthropic.NewUserMessage(anthropic.NewTextBlock("Hello from Azure!")),
+    },
+}
+msg, err := client.CreateMessage(ctx, req) // routed to the "azure" backend
+```
+
+A few notes:
+
+- **`APIVersion` is required.** Anthropify deliberately does not pick
+  a default `?api-version=` value so upgrades stay visible in source
+  control. Use the version your Azure resource is pinned to (e.g.
+  `2025-03-01-preview`).
+- **Deployment-less URL form.** Leave `Deployment` empty when you
+  want the body's `model` field to drive the deployment selection —
+  useful when one Azure resource hosts many deployments and you want
+  to route via `Route.UpstreamModel` instead. The layered fallback
+  is `cfg.Deployment > Route.UpstreamModel > req.Model`.
+- **Backend-name namespace.** `WithOpenAIResponsesCompat("foo", ...)`
+  and `WithAzureOpenAI("foo", ...)` collide. The duplicate is
+  rejected at `New()` with an explicit error. Pick distinct names
+  (e.g. `"openai"` and `"azure"`).
+- **`cache_control` on Azure.** Both per-block and v0.2.0 top-level
+  forms are forwarded verbatim. Azure caches automatically server-
+  side, identical to vanilla OpenAI Responses.
+- **Multiple deployments.** Register one
+  `WithAzureOpenAI("azure-gpt5", …)` per deployment and route
+  different model prefixes at each. Anthropify intentionally does not
+  embed routing logic in the adapter.
+
+See `docs/design/v0.2.0-azure-responses.md` for the full design
+rationale.
+
 ## Prompt caching
 
 Anthropify supports both Anthropic prompt-caching modes:
@@ -222,6 +312,7 @@ have no analogous request field:
 | Anthropic         | emits `{"cache_control":{"type":"ephemeral"}}`   |
 | MiniMax           | same wire body via the anthropic adapter         |
 | OpenAI Responses  | no-op (auto-cached server-side, prompts >1024 t) |
+| Azure OpenAI      | no-op (auto-cached server-side, prompts >1024 t) |
 | Gemini Native     | no-op (Gemini 2.5+ implicit caching server-side) |
 | Kimi (Moonshot)   | no-op (auto prefix cache server-side)            |
 | GLM (Zhipu)       | no-op (auto cache server-side)                   |

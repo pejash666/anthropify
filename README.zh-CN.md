@@ -119,6 +119,7 @@ for _, t := range turns {
 |-------------------|-------|--------------------------|----------|------------------|---------------|
 | Anthropic         | 是    | 原生                     | 是       | 是               | 顶层 + per-block |
 | OpenAI Responses  | 是    | drain-and-assemble       | 是       | 是 (reasoning)   | 服务端自动    |
+| Azure OpenAI      | 是    | drain-and-assemble       | 是       | 是 (reasoning)   | 服务端自动    |
 | Gemini Native     | 是    | drain-and-assemble       | 是       | 是               | 服务端自动    |
 | Kimi (Moonshot)   | 是    | drain-and-assemble       | 是       | 是               | 服务端自动    |
 | GLM (智谱)        | 是    | drain-and-assemble       | 是       | 视模型而定       | 服务端自动    |
@@ -131,6 +132,16 @@ for _, t := range turns {
 > 模式（`WithAnthropicCompat("minimax", …)` +
 > `WithModelRoute("MiniMax-", …)`）见
 > [example 07](./examples/07-anthropic-compat)。
+
+> **Azure OpenAI** 是 OpenAI Responses 协议家族的第二个 backend，
+> 在 adapter 内部复用 `adapter/openai_responses` 同一份代码——
+> canonical `BuildRequest` 和 SSE→Anthropic 事件转换器都字节一致。
+> 在网络边界只有两件事不同：URL 拼装（按 `Deployment` 是否填写
+> 自动选 deployment-bound `<resource>/openai/deployments/<dep>/responses?api-version=…`
+> 还是 deployment-less `<resource>/openai/responses?api-version=…`），
+> 以及 auth 头（同时发 `api-key` 和 `Authorization: Bearer`，对
+> resource key、Entra/AAD token、APIM 网关都通用）。注册用
+> `WithAzureOpenAI`，详见下方 [Azure OpenAI 集成](#azure-openai-集成) 章节。
 
 > Anthropify 推荐使用 `gemini-3.5-flash`（或任意 Gemini 3.x flash 系列）。
 > Adapter 在 `generationConfig.thinkingConfig` 中发送 `thinkingLevel`，
@@ -177,6 +188,76 @@ ap.WithModelRoute("MiniMax-", ap.Route{
 两个 backend 共享一份 adapter 和一份路由表 —— 完整 demo 见
 [example 07](./examples/07-anthropic-compat)。
 
+## Azure OpenAI 集成
+
+Azure OpenAI 是 OpenAI Responses 协议家族的第二个 backend。
+anthropify 把 Azure 的请求复用到与 vanilla OpenAI 完全相同的
+`adapter/openai_responses` 代码路径上——canonical `BuildRequest`
+和 SSE→Anthropic 事件转换器一字未改。只在网络边界做两件事：
+
+- **URL 拼装。** Azure 的 Responses 端点有两种形态：
+  `<resource>/openai/responses?api-version=…`（deployment-less）和
+  `<resource>/openai/deployments/<deployment>/responses?api-version=…`
+  （deployment-bound）。anthropify 按 `AzureOpenAIConfig.Deployment`
+  是否填写自动选。
+- **认证头。** Azure 历史上用 `api-key` 头送 resource key；
+  Entra/AAD access token 用 `Authorization: Bearer`；APIM 网关
+  可能扒掉其中一个。anthropify 每次请求两个头都发，所以一个
+  `APIKey` 字段不管你填的是 resource key 还是 AAD token 都能跑。
+
+注册时给 Azure backend 起任意名字，再用标准的 `WithModelRoute`
+路由特定模型前缀（或精确模型名）到这个 backend。推荐写法是每个
+Azure deployment 一个 `WithAzureOpenAI(...)`，配合显式
+`WithModelRoute` 让调用方继续使用标准的短模型名：
+
+```go
+client, err := ap.New(
+    ap.WithAzureOpenAI("azure", ap.AzureOpenAIConfig{
+        BaseURL:    "https://my-resource.openai.azure.com",
+        APIKey:     os.Getenv("AZURE_OPENAI_API_KEY"),
+        APIVersion: "2025-03-01-preview",
+        Deployment: "gpt-5-deployment",
+    }),
+    ap.WithModelRoute("gpt-5", ap.Route{
+        Provider: ap.ProviderOpenAIResponses,
+        Backend:  "azure",
+    }),
+)
+if err != nil {
+    log.Fatal(err)
+}
+
+req := anthropic.MessageNewParams{
+    Model:     "gpt-5", // 标准短名字
+    MaxTokens: 1024,
+    Messages: []anthropic.MessageParam{
+        anthropic.NewUserMessage(anthropic.NewTextBlock("Hello from Azure!")),
+    },
+}
+msg, err := client.CreateMessage(ctx, req) // 路由到 "azure" backend
+```
+
+几条注意事项：
+
+- **`APIVersion` 必填。** anthropify 故意不挑默认值，让 api-version
+  升级永远在 source control 里可见。填你 Azure 资源 pin 的版本
+  （比如 `2025-03-01-preview`）。
+- **Deployment-less 形态。** `Deployment` 留空时，body 的 `model`
+  字段决定走哪个 deployment——一个 Azure resource 上挂多个
+  deployment、又想用 `Route.UpstreamModel` 路由时很有用。分层
+  fallback：`cfg.Deployment > Route.UpstreamModel > req.Model`。
+- **Backend 名字命名空间。** `WithOpenAIResponsesCompat("foo", ...)`
+  和 `WithAzureOpenAI("foo", ...)` 会撞车。`New()` 会显式报错。
+  起不同的名字（比如 `"openai"` 和 `"azure"`）。
+- **Azure 上的 `cache_control`。** per-block 和 v0.2.0 顶层两种
+  写法都原样转发。Azure 跟 vanilla OpenAI Responses 一样，服务端
+  自动 cache。
+- **多 deployment。** 给每个 deployment 注册一个
+  `WithAzureOpenAI("azure-gpt5", …)`，再把不同模型前缀路由到不同
+  名字。anthropify 故意不在 adapter 里嵌路由逻辑。
+
+完整设计文档见 `docs/design/v0.2.0-azure-responses.md`。
+
 ## Prompt caching
 
 Anthropify 同时支持 Anthropic 的两种 prompt caching 模式：
@@ -216,6 +297,7 @@ backend 上是有据可依的、静默 no-op —— 这些上游服务端本来�
 | Anthropic         | 发出 `{"cache_control":{"type":"ephemeral"}}`     |
 | MiniMax           | 同上（共用 anthropic adapter）                    |
 | OpenAI Responses  | no-op（>1024 token 时服务端自动 cache）           |
+| Azure OpenAI      | no-op（>1024 token 时服务端自动 cache）           |
 | Gemini Native     | no-op（Gemini 2.5+ 隐式 cache）                   |
 | Kimi (Moonshot)   | no-op（前缀自动 cache）                           |
 | GLM (智谱)        | no-op（服务端自动 cache）                         |
