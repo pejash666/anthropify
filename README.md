@@ -129,6 +129,7 @@ adopts it as the canonical form and normalises every provider into it.
 | Kimi (Moonshot)   | yes       | drain-and-assemble     | yes      | yes               | server auto   |
 | GLM (Zhipu)       | yes       | drain-and-assemble     | yes      | model-dependent   | server auto   |
 | MiniMax           | yes       | native (anthropic)     | yes      | yes               | top-level + per-block |
+| AWS Bedrock       | yes       | native (anthropic)     | yes      | yes               | top-level + per-block |
 | DeepSeek          | yes       | drain-and-assemble     | yes      | yes (V3.2)        | server auto   |
 
 > **MiniMax** speaks the Anthropic protocol natively at
@@ -138,6 +139,19 @@ adopts it as the canonical form and normalises every provider into it.
 > [example 07](./examples/07-anthropic-compat) for the registration
 > pattern (`WithAnthropicCompat("minimax", …)` +
 > `WithModelRoute("MiniMax-", …)`).
+
+> **AWS Bedrock** is the third backend on the same Anthropic-protocol
+> family. The Bedrock branch dispatches through `anthropic-sdk-go`'s
+> official `bedrock` subpackage, which transparently handles SigV4
+> signing, the `/model/{id}/invoke[-with-response-stream]` URL rewrite,
+> the `anthropic_version: bedrock-2023-05-31` body injection, the
+> `anthropic-beta` header → `anthropic_beta` body translation, and AWS
+> event-stream decoding back into canonical Anthropic SSE events. From
+> the caller's perspective the request and response shapes are
+> identical to Direct or MiniMax. Register with `WithAnthropicBedrock`
+> and route Bedrock model IDs (or inference-profile ARNs) via
+> `WithModelRoute` + `Route.UpstreamModel`. See the [AWS Bedrock
+> integration](#aws-bedrock-integration) section below.
 
 > **Azure OpenAI** is the second backend on the OpenAI Responses
 > protocol family. Internally rides on the same
@@ -193,6 +207,85 @@ ap.WithModelRoute("MiniMax-", ap.Route{
 
 The two backends share one adapter and one routing table — see
 [example 07](./examples/07-anthropic-compat) for the full demo.
+
+## AWS Bedrock integration
+
+AWS Bedrock is the third backend on the Anthropic-protocol family.
+Anthropify delegates every Bedrock-specific concern (SigV4 request
+signing, the `/model/{id}/invoke[-with-response-stream]` URL rewrite,
+the `anthropic_version: bedrock-2023-05-31` body injection, the
+`anthropic-beta` header → `anthropic_beta` body translation, and the
+AWS event-stream binary frame decoding) to the official `bedrock`
+subpackage of `anthropic-sdk-go`. From your code's perspective, a
+Bedrock backend is byte-identical to Direct or MiniMax: same
+`anthropic.MessageNewParams` request, same `MessageStreamEventUnion`
+streaming, same `*anthropic.Message` non-streaming response.
+
+Register Bedrock under any name and route specific model prefixes (or
+exact model names) at it via the standard `WithModelRoute` machinery.
+Bedrock requires per-account model identifiers — full names like
+`anthropic.claude-opus-4-5-20250929-v1:0` or inference-profile ARNs
+like `arn:aws:bedrock:us-east-1:123456789012:application-inference-profile/abcdef`
+— so the canonical pattern is to keep your `req.Model` short and let
+`Route.UpstreamModel` rewrite it on dispatch.
+
+```go
+client, err := ap.New(
+    ap.WithAnthropic(ap.AnthropicConfig{
+        APIKey: os.Getenv("ANTHROPIC_API_KEY"),
+    }),
+    ap.WithAnthropicBedrock("bedrock", ap.BedrockConfig{
+        AccessKeyID:     os.Getenv("AWS_ACCESS_KEY_ID"),
+        SecretAccessKey: os.Getenv("AWS_SECRET_ACCESS_KEY"),
+        // SessionToken is optional: only set for STS / SSO temporary keys.
+        Region: "us-east-1",
+    }),
+    ap.WithModelRoute("claude-opus-4-5", ap.Route{
+        Provider:      ap.ProviderAnthropic,
+        Backend:       "bedrock",
+        UpstreamModel: "anthropic.claude-opus-4-5-20250929-v1:0",
+    }),
+)
+if err != nil {
+    log.Fatal(err)
+}
+
+req := anthropic.MessageNewParams{
+    Model:     "claude-opus-4-5", // canonical short name
+    MaxTokens: 1024,
+    Messages: []anthropic.MessageParam{
+        anthropic.NewUserMessage(anthropic.NewTextBlock("Hello from Bedrock!")),
+    },
+}
+msg, err := client.CreateMessage(ctx, req) // routed to Bedrock via the route table
+```
+
+A few notes:
+
+- **No built-in model ID table.** Inference-profile ARNs are
+  account- and region-specific; published Bedrock model IDs change
+  per release. `Route.UpstreamModel` is the single authoritative hook
+  — keeping the mapping table inside *your* config is the only way to
+  guarantee correctness for *your* account.
+- **`anthropic-beta` flags work transparently.** Set them via
+  `BedrockConfig.ExtraHeaders["anthropic-beta"] = []string{"…"}`; the
+  SDK's bedrock middleware lifts each value into the request body's
+  `anthropic_beta` array because Bedrock rejects the HTTP header.
+- **`cache_control` on Bedrock.** Both per-block and v0.2.0 top-level
+  forms are forwarded verbatim. Bedrock's documented support for the
+  top-level form is currently limited; anthropify deliberately does
+  not strip the field, so as upstream support lands you get it for
+  free.
+- **`SessionToken` is optional.** Set it only for STS-vended or
+  AWS-SSO temporary credentials; long-lived IAM-user keys never have
+  one. When set, anthropify threads it through SigV4 as
+  `X-Amz-Security-Token`.
+- **Multiple AWS accounts.** Register one
+  `WithAnthropicBedrock("aws-prod", …)` per account and route
+  different model prefixes at each. Anthropify intentionally does not
+  embed a load-balancer in the protocol shim.
+
+See `docs/design/v0.2.0-aws-bedrock.md` for the full design rationale.
 
 ## Azure OpenAI integration
 

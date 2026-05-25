@@ -124,6 +124,7 @@ for _, t := range turns {
 | Kimi (Moonshot)   | 是    | drain-and-assemble       | 是       | 是               | 服务端自动    |
 | GLM (智谱)        | 是    | drain-and-assemble       | 是       | 视模型而定       | 服务端自动    |
 | MiniMax           | 是    | 原生 (anthropic)         | 是       | 是               | 顶层 + per-block |
+| AWS Bedrock       | 是    | 原生 (anthropic)         | 是       | 是               | 顶层 + per-block |
 | DeepSeek          | 是    | drain-and-assemble       | 是       | 是 (V3.2)        | 服务端自动    |
 
 > **MiniMax** 在 `https://api.minimax.io/anthropic/v1/messages`
@@ -132,6 +133,16 @@ for _, t := range turns {
 > 模式（`WithAnthropicCompat("minimax", …)` +
 > `WithModelRoute("MiniMax-", …)`）见
 > [example 07](./examples/07-anthropic-compat)。
+
+> **AWS Bedrock** 是 Anthropic 协议家族的第三个 backend。Bedrock 分支
+> 在 adapter 内部走 `anthropic-sdk-go` 官方 `bedrock` 子包，由它透明
+> 处理 SigV4 签名、`/model/{id}/invoke[-with-response-stream]` 路径
+> 改写、`anthropic_version: bedrock-2023-05-31` body 注入、
+> `anthropic-beta` 头转 `anthropic_beta` body 字段，以及 AWS
+> event-stream 二进制帧解码 —— 解出来的事件 JSON 与 Direct/MiniMax
+> 字节一致。注册用 `WithAnthropicBedrock`，AWS 那边的模型 ID（或
+> inference-profile ARN）通过 `WithModelRoute` + `Route.UpstreamModel`
+> 映射。详见下方 [AWS Bedrock 集成](#aws-bedrock-集成) 章节。
 
 > **Azure OpenAI** 是 OpenAI Responses 协议家族的第二个 backend，
 > 在 adapter 内部复用 `adapter/openai_responses` 同一份代码——
@@ -187,6 +198,80 @@ ap.WithModelRoute("MiniMax-", ap.Route{
 
 两个 backend 共享一份 adapter 和一份路由表 —— 完整 demo 见
 [example 07](./examples/07-anthropic-compat)。
+
+## AWS Bedrock 集成
+
+AWS Bedrock 是 Anthropic 协议家族的第三个 backend。anthropify 把所有
+Bedrock 专属的脏活（SigV4 请求签名、
+`/model/{id}/invoke[-with-response-stream]` URL 改写、
+`anthropic_version: bedrock-2023-05-31` body 注入、
+`anthropic-beta` 头 → `anthropic_beta` body 字段翻译，以及 AWS
+event-stream 二进制帧解码回 Anthropic 标准 SSE 事件）全部委托给
+`anthropic-sdk-go` 官方的 `bedrock` 子包。从调用方视角看，Bedrock
+backend 与 Direct / MiniMax 字节一致：同样的
+`anthropic.MessageNewParams` 请求、同样的 `MessageStreamEventUnion`
+流式事件、同样的 `*anthropic.Message` 非流式响应。
+
+注册时给 Bedrock 起任意名字，再用标准的 `WithModelRoute` 路由特定
+模型前缀（或精确模型名）到这个 backend。Bedrock 的模型 ID 是按
+账户绑定的——形如 `anthropic.claude-opus-4-5-20250929-v1:0`，或者
+inference-profile ARN
+`arn:aws:bedrock:us-east-1:123456789012:application-inference-profile/abcdef`
+——所以推荐写法是 `req.Model` 里只放短名字，让 `Route.UpstreamModel`
+在分发时改写。
+
+```go
+client, err := ap.New(
+    ap.WithAnthropic(ap.AnthropicConfig{
+        APIKey: os.Getenv("ANTHROPIC_API_KEY"),
+    }),
+    ap.WithAnthropicBedrock("bedrock", ap.BedrockConfig{
+        AccessKeyID:     os.Getenv("AWS_ACCESS_KEY_ID"),
+        SecretAccessKey: os.Getenv("AWS_SECRET_ACCESS_KEY"),
+        // SessionToken 可选；只有 STS / SSO 临时密钥才需要
+        Region: "us-east-1",
+    }),
+    ap.WithModelRoute("claude-opus-4-5", ap.Route{
+        Provider:      ap.ProviderAnthropic,
+        Backend:       "bedrock",
+        UpstreamModel: "anthropic.claude-opus-4-5-20250929-v1:0",
+    }),
+)
+if err != nil {
+    log.Fatal(err)
+}
+
+req := anthropic.MessageNewParams{
+    Model:     "claude-opus-4-5", // 标准短名字
+    MaxTokens: 1024,
+    Messages: []anthropic.MessageParam{
+        anthropic.NewUserMessage(anthropic.NewTextBlock("Hello from Bedrock!")),
+    },
+}
+msg, err := client.CreateMessage(ctx, req) // 通过路由表分发到 Bedrock
+```
+
+几条注意事项：
+
+- **不内置模型 ID 映射表。** Inference-profile ARN 是按账户/区域
+  绑定的；公开的 Bedrock 模型 ID 也每次发版都在变。
+  `Route.UpstreamModel` 是唯一权威钩子——映射表放在 *你自己的*
+  配置里，才能保证 *你的* 账户上是对的。
+- **`anthropic-beta` 标志透明可用。** 通过
+  `BedrockConfig.ExtraHeaders["anthropic-beta"] = []string{"…"}` 设置；
+  SDK 的 bedrock middleware 会把每个值提到请求 body 的
+  `anthropic_beta` 数组里——因为 Bedrock 不接 HTTP 头。
+- **Bedrock 上的 `cache_control`。** per-block 和 v0.2.0 顶层两种
+  写法都原样转发。Bedrock 目前对顶层形态的支持还在早期；anthropify
+  故意不剥这个字段，所以等上游加上之后你不需要改一行代码。
+- **`SessionToken` 可选。** 仅当使用 STS 临时密钥或 AWS SSO 时设置；
+  长期 IAM-user key 不需要。设置后 anthropify 会通过 SigV4 把它
+  作为 `X-Amz-Security-Token` 头送出。
+- **多 AWS 账户。** 给每个账户注册一个
+  `WithAnthropicBedrock("aws-prod", …)`，再把不同模型前缀路由到不同
+  名字。anthropify 故意不在协议 shim 里嵌负载均衡器。
+
+完整设计文档见 `docs/design/v0.2.0-aws-bedrock.md`。
 
 ## Azure OpenAI 集成
 
