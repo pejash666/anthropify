@@ -122,13 +122,13 @@ adopts it as the canonical form and normalises every provider into it.
 
 | Provider          | Streaming | Non-streaming         | Tool use | Thinking          | cache_control |
 |-------------------|-----------|------------------------|----------|-------------------|---------------|
-| Anthropic         | yes       | native                 | yes      | yes               | yes           |
-| OpenAI Responses  | yes       | drain-and-assemble     | yes      | yes (reasoning)   | —             |
-| Gemini Native     | yes       | drain-and-assemble     | yes      | yes               | partial       |
-| Kimi (Moonshot)   | yes       | drain-and-assemble     | yes      | yes               | —             |
-| GLM (Zhipu)       | yes       | drain-and-assemble     | yes      | model-dependent   | —             |
-| MiniMax           | yes       | native (anthropic)     | yes      | yes               | inherits      |
-| DeepSeek          | yes       | drain-and-assemble     | yes      | yes (V3.2)        | —             |
+| Anthropic         | yes       | native                 | yes      | yes               | top-level + per-block |
+| OpenAI Responses  | yes       | drain-and-assemble     | yes      | yes (reasoning)   | server auto   |
+| Gemini Native     | yes       | drain-and-assemble     | yes      | yes               | server auto   |
+| Kimi (Moonshot)   | yes       | drain-and-assemble     | yes      | yes               | server auto   |
+| GLM (Zhipu)       | yes       | drain-and-assemble     | yes      | model-dependent   | server auto   |
+| MiniMax           | yes       | native (anthropic)     | yes      | yes               | top-level + per-block |
+| DeepSeek          | yes       | drain-and-assemble     | yes      | yes (V3.2)        | server auto   |
 
 > **MiniMax** speaks the Anthropic protocol natively at
 > `https://api.minimax.io/anthropic/v1/messages`, so it plugs into the
@@ -181,6 +181,58 @@ ap.WithModelRoute("MiniMax-", ap.Route{
 
 The two backends share one adapter and one routing table — see
 [example 07](./examples/07-anthropic-compat) for the full demo.
+
+## Prompt caching
+
+Anthropify supports both Anthropic prompt-caching modes:
+
+- **Top-level automatic** (v0.2.0+). One toggle on the request, the
+  upstream picks the optimal cache breakpoint and slides it forward
+  as the conversation grows.
+
+  ```go
+  req := anthropic.MessageNewParams{
+      Model:     anthropic.Model("claude-opus-4-7"),
+      MaxTokens: 1024,
+      System:    longSystemPrompt, // big shared context
+      Messages:  conversation,
+  }
+  ap.SetCacheControl(&req, ap.CacheControl{Type: ap.CacheControlEphemeral})
+  msg, err := client.CreateMessage(ctx, req)
+  ```
+
+- **Per-block manual 4-tag**. Continues to work via the SDK's
+  per-block `SetExtraFields(map[string]any{"cache_control": ...})`
+  on `system` / `messages` / `tools` content blocks. Use this when
+  you need to pin the cache breakpoint to a specific block.
+
+The two modes can be combined; if both are set Anthropic resolves
+them per the [official docs](https://platform.claude.com/docs/en/build-with-claude/prompt-caching).
+
+### Provider behaviour matrix
+
+`SetCacheControl` is **only** translated to a wire field on the
+anthropic adapter (real Claude **and** MiniMax via
+`WithAnthropicCompat`). On every other backend it is a documented,
+silent no-op — those upstreams cache automatically server-side and
+have no analogous request field:
+
+| Provider          | Top-level `SetCacheControl` effect              |
+|-------------------|--------------------------------------------------|
+| Anthropic         | emits `{"cache_control":{"type":"ephemeral"}}`   |
+| MiniMax           | same wire body via the anthropic adapter         |
+| OpenAI Responses  | no-op (auto-cached server-side, prompts >1024 t) |
+| Gemini Native     | no-op (Gemini 2.5+ implicit caching server-side) |
+| Kimi (Moonshot)   | no-op (auto prefix cache server-side)            |
+| GLM (Zhipu)       | no-op (auto cache server-side)                   |
+
+This means you can call `SetCacheControl(&req, ...)` unconditionally
+in a multi-provider routing layer — it will activate on Claude and be
+quietly ignored everywhere else.
+
+v0.2.0 ships only the default 5-minute TTL (`{"type":"ephemeral"}`).
+The 1-hour extended-cache form is gated behind an Anthropic beta
+header upstream and will be exposed in a later release.
 
 ## Gemini provider configuration
 

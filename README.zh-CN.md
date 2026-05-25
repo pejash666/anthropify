@@ -117,13 +117,13 @@ for _, t := range turns {
 
 | Provider          | 流式  | 非流式                  | Tool use | Thinking         | cache_control |
 |-------------------|-------|--------------------------|----------|------------------|---------------|
-| Anthropic         | 是    | 原生                     | 是       | 是               | 是            |
-| OpenAI Responses  | 是    | drain-and-assemble       | 是       | 是 (reasoning)   | —             |
-| Gemini Native     | 是    | drain-and-assemble       | 是       | 是               | 部分          |
-| Kimi (Moonshot)   | 是    | drain-and-assemble       | 是       | 是               | —             |
-| GLM (智谱)        | 是    | drain-and-assemble       | 是       | 视模型而定       | —             |
-| MiniMax           | 是    | 原生 (anthropic)         | 是       | 是               | 继承          |
-| DeepSeek          | 是    | drain-and-assemble       | 是       | 是 (V3.2)        | —             |
+| Anthropic         | 是    | 原生                     | 是       | 是               | 顶层 + per-block |
+| OpenAI Responses  | 是    | drain-and-assemble       | 是       | 是 (reasoning)   | 服务端自动    |
+| Gemini Native     | 是    | drain-and-assemble       | 是       | 是               | 服务端自动    |
+| Kimi (Moonshot)   | 是    | drain-and-assemble       | 是       | 是               | 服务端自动    |
+| GLM (智谱)        | 是    | drain-and-assemble       | 是       | 视模型而定       | 服务端自动    |
+| MiniMax           | 是    | 原生 (anthropic)         | 是       | 是               | 顶层 + per-block |
+| DeepSeek          | 是    | drain-and-assemble       | 是       | 是 (V3.2)        | 服务端自动    |
 
 > **MiniMax** 在 `https://api.minimax.io/anthropic/v1/messages`
 > 直接讲 Anthropic 协议，因此可以挂在与真 Claude *同一个* 进程内
@@ -176,6 +176,56 @@ ap.WithModelRoute("MiniMax-", ap.Route{
 
 两个 backend 共享一份 adapter 和一份路由表 —— 完整 demo 见
 [example 07](./examples/07-anthropic-compat)。
+
+## Prompt caching
+
+Anthropify 同时支持 Anthropic 的两种 prompt caching 模式：
+
+- **顶层自动模式**（v0.2.0+）。请求上挂一个总开关，由上游自动选最优
+  cache 切点，并随对话推进自动前移。
+
+  ```go
+  req := anthropic.MessageNewParams{
+      Model:     anthropic.Model("claude-opus-4-7"),
+      MaxTokens: 1024,
+      System:    longSystemPrompt, // 共享的大段 context
+      Messages:  conversation,
+  }
+  ap.SetCacheControl(&req, ap.CacheControl{Type: ap.CacheControlEphemeral})
+  msg, err := client.CreateMessage(ctx, req)
+  ```
+
+- **per-block 手工 4-tag 模式**。继续通过 SDK 的逐 block
+  `SetExtraFields(map[string]any{"cache_control": ...})`（挂在
+  `system` / `messages` / `tools` 的 content block 上）。需要把 cache
+  切点固定在某个具体 block 时使用。
+
+两种模式可以并存；同时设置时 Anthropic 按
+[官方文档](https://platform.claude.com/docs/en/build-with-claude/prompt-caching)
+的优先级处理。
+
+### 各 provider 行为矩阵
+
+`SetCacheControl` **只在** anthropic adapter 上被翻译成线上字段（
+真 Claude **以及** 通过 `WithAnthropicCompat` 注册的 MiniMax）。其他
+backend 上是有据可依的、静默 no-op —— 这些上游服务端本来就自动 cache，
+也没有对应的请求字段：
+
+| Provider          | 顶层 `SetCacheControl` 效果                       |
+|-------------------|---------------------------------------------------|
+| Anthropic         | 发出 `{"cache_control":{"type":"ephemeral"}}`     |
+| MiniMax           | 同上（共用 anthropic adapter）                    |
+| OpenAI Responses  | no-op（>1024 token 时服务端自动 cache）           |
+| Gemini Native     | no-op（Gemini 2.5+ 隐式 cache）                   |
+| Kimi (Moonshot)   | no-op（前缀自动 cache）                           |
+| GLM (智谱)        | no-op（服务端自动 cache）                         |
+
+也就是说，多 provider 路由层可以无脑调用
+`SetCacheControl(&req, ...)` —— Claude 上会真正生效，其他家上自动安静
+忽略。
+
+v0.2.0 只发布默认 5 分钟 TTL（`{"type":"ephemeral"}`）。
+1 小时延长 TTL 形态在上游需要 Anthropic beta header，会在后续版本暴露。
 
 ## Gemini 三种鉴权模式
 
