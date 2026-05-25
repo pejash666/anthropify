@@ -2,7 +2,7 @@
 # routes through `go`.
 
 .PHONY: test test-e2e test-e2e-record vet build examples \
-	example-01 example-02 example-03 example-04 example-05 example-06
+	example-01 example-02 example-03 example-04 example-05 example-06 example-07
 
 build:
 	go build ./...
@@ -45,3 +45,5 @@ example-05:
 	@set -a; [ -f .env.e2e ] && . ./.env.e2e; set +a; go run ./examples/05-thinking-blocks
 example-06:
 	@set -a; [ -f .env.e2e ] && . ./.env.e2e; set +a; go run ./examples/06-streaming-events
+example-07:
+	@set -a; [ -f .env.e2e ] && . ./.env.e2e; set +a; go run ./examples/07-anthropic-compat

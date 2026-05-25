@@ -10,12 +10,18 @@ import (
 	ap "github.com/shahao/anthropify"
 )
 
-// Demonstrates that one anthropify.Client can dispatch to four different
-// providers based purely on the req.Model prefix. The application code is
-// identical across providers; only the model name changes.
+// Demonstrates that one anthropify.Client can dispatch to five
+// different providers — across two protocols — based purely on the
+// req.Model prefix. Anthropic and MiniMax share the *anthropic*
+// protocol but ride two distinct backends; the application code is
+// identical across providers.
 func main() {
 	client, err := ap.New(
 		ap.WithAnthropic(ap.AnthropicConfig{APIKey: os.Getenv("ANTHROPIC_API_KEY")}),
+		ap.WithAnthropicCompat("minimax", ap.AnthropicConfig{
+			BaseURL: envOr("MINIMAX_BASE_URL", "https://api.minimax.io/anthropic"),
+			APIKey:  os.Getenv("MINIMAX_API_KEY"),
+		}),
 		ap.WithGemini(ap.GeminiConfig{
 			Mode:   ap.GeminiModeStudio,
 			APIKey: os.Getenv("GEMINI_API_KEY"),
@@ -28,13 +34,19 @@ func main() {
 			BaseURL: envOr("GLM_BASE_URL", "https://open.bigmodel.cn/api/paas/v4"),
 			APIKey:  os.Getenv("GLM_API_KEY"),
 		}),
-		// claude-/gpt-/gemini- are routed by default. Kimi and GLM need
-		// explicit prefix rules tied to their chat_completions backend.
+		// claude-/gpt-/gemini- are routed by default. Kimi, GLM, and
+		// MiniMax need explicit prefix rules tied to their backend
+		// names. MiniMax pins the "MiniMax-" prefix to the second
+		// anthropic-protocol backend so the dispatcher does not confuse
+		// it with real Claude.
 		ap.WithModelRoute("kimi-", ap.Route{
 			Provider: ap.ProviderChatCompletions, Backend: "kimi",
 		}),
 		ap.WithModelRoute("glm-", ap.Route{
 			Provider: ap.ProviderChatCompletions, Backend: "glm",
+		}),
+		ap.WithModelRoute("MiniMax-", ap.Route{
+			Provider: ap.ProviderAnthropic, Backend: "minimax",
 		}),
 	)
 	if err != nil {
@@ -47,6 +59,7 @@ func main() {
 		envOr("GEMINI_MODEL", "gemini-3.5-flash"),
 		envOr("KIMI_MODEL", "kimi-k2.6"),
 		envOr("GLM_MODEL", "glm-5.1"),
+		envOr("MINIMAX_MODEL", "MiniMax-M2.7"),
 	} {
 		fmt.Printf("\n--- %s ---\n", model)
 		askOnce(client, model, question)
