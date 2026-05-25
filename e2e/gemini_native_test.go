@@ -60,36 +60,67 @@ func TestE2E_Gemini_ToolUseMultiRound(t *testing.T) {
 	cli, model := newGeminiClient(t)
 	ctx := context.Background()
 
-	// Round 1: ask the question, capture the tool_use block.
+	// Round 1: ask the question, capture the tool_use block. The
+	// upstream occasionally returns a tool_use block without a
+	// thought_signature on cold paths; since the second turn would
+	// 400 in that case, we retry round 1 once before giving up. We
+	// do NOT bake retry into the library itself — that's a caller
+	// concern (see agent-deck SILENT_RETRY_STOP_REASONS) — but the
+	// test wants stable signal.
 	round1Params := helpers.WeatherToolPrompt(model)
-	msg, err := cli.CreateMessage(ctx, round1Params)
-	if err != nil {
-		t.Fatalf("round1 CreateMessage: %v", err)
-	}
-	if msg == nil || len(msg.Content) == 0 {
-		t.Fatalf("round1 returned empty message")
-	}
-
-	var toolUseID, toolName string
-	var toolInput any
-	var toolSig string
-	for _, b := range msg.Content {
-		if b.Type == "tool_use" {
-			toolUseID = b.ID
-			toolName = b.Name
-			_ = json.Unmarshal(b.Input, &toolInput)
-			toolSig = extractGeminiThoughtSignature(b.RawJSON())
+	const maxAttempts = 2
+	var (
+		msg       *anthropic.Message
+		toolUseID string
+		toolName  string
+		toolInput any
+		toolSig   string
+	)
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		var err error
+		msg, err = cli.CreateMessage(ctx, round1Params)
+		if err != nil {
+			t.Fatalf("round1 CreateMessage (attempt %d): %v", attempt, err)
+		}
+		if msg == nil || len(msg.Content) == 0 {
+			if attempt < maxAttempts {
+				t.Logf("round1 attempt %d returned empty message; retrying", attempt)
+				continue
+			}
+			t.Fatalf("round1 returned empty message after %d attempts", maxAttempts)
+		}
+		toolUseID, toolName, toolInput, toolSig = "", "", nil, ""
+		for _, b := range msg.Content {
+			if b.Type == "tool_use" {
+				toolUseID = b.ID
+				toolName = b.Name
+				_ = json.Unmarshal(b.Input, &toolInput)
+				toolSig = extractGeminiThoughtSignature(b.RawJSON())
+				break
+			}
+		}
+		if toolUseID != "" && toolSig != "" {
 			break
 		}
-	}
-	if toolUseID == "" {
-		t.Fatalf("round1 emitted no tool_use block; stop=%s blocks=%d",
-			msg.StopReason, len(msg.Content))
+		if attempt < maxAttempts {
+			t.Logf("round1 attempt %d: tool_use_id=%q sig_present=%v; retrying",
+				attempt, toolUseID, toolSig != "")
+			continue
+		}
+		if toolUseID == "" {
+			t.Fatalf("round1 emitted no tool_use block after %d attempts; stop=%s blocks=%d",
+				maxAttempts, msg.StopReason, len(msg.Content))
+		}
+		// We have a tool_use but no signature. Continue anyway —
+		// upstream may not require it for this particular model
+		// version; round 2 will surface the 400 if it does.
+		t.Logf("round1: tool_use_id=%s captured without thought_signature; proceeding", toolUseID)
 	}
 
 	// Build round 2: replay the original user turn, the assistant
-	// turn (with thought_signature passed through ExtraFields), and
-	// a synthetic tool_result.
+	// turn (with thought_signature passed through ExtraFields and
+	// the original block order preserved), and a synthetic
+	// tool_result.
 	assistantContent := assistantBlocksFromMessage(msg)
 	round2Params := round1Params
 	round2Params.Messages = []anthropic.MessageParam{
@@ -117,9 +148,14 @@ func TestE2E_Gemini_ToolUseMultiRound(t *testing.T) {
 
 // assistantBlocksFromMessage rebuilds an assistant turn as
 // ContentBlockParamUnion so it can be appended to the next request.
-// For Gemini 3.x tool_use blocks the upstream attaches a
+// Block ordering is preserved verbatim: Gemini 3.x is sensitive to
+// the assistant turn's block sequence (e.g. [thinking, tool_use] must
+// not be reordered), so we walk msg.Content in order and emit each
+// block in place. For tool_use blocks the upstream attaches a
 // `thought_signature` that must round-trip; we extract it from the
-// response block's raw JSON and replay it via SetExtraFields. Mirrors
+// response block's raw JSON and replay it via SetExtraFields as a
+// JSON string (the SDK marshals ExtraFields straight into the wire
+// JSON, so no bytes/base64 dance is needed on the Go side). Mirrors
 // examples/04-tool-use-portable/main.go:assistantBlocks.
 func assistantBlocksFromMessage(msg *anthropic.Message) []anthropic.ContentBlockParamUnion {
 	out := make([]anthropic.ContentBlockParamUnion, 0, len(msg.Content))
@@ -127,6 +163,12 @@ func assistantBlocksFromMessage(msg *anthropic.Message) []anthropic.ContentBlock
 		switch b.Type {
 		case "text":
 			out = append(out, anthropic.NewTextBlock(b.Text))
+		case "thinking":
+			// Round-trip the thinking block (and its signature when
+			// present) so the assistant turn's block ordering survives
+			// intact. Upstreams that don't recognise `thinking` still
+			// accept it as a no-op via the canonical Anthropic shape.
+			out = append(out, anthropic.NewThinkingBlock(b.Signature, b.Thinking))
 		case "tool_use":
 			var input any
 			_ = json.Unmarshal(b.Input, &input)
