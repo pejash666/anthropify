@@ -10,7 +10,7 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 
-	"github.com/shahao/anthropify/adapter"
+	"github.com/pejash666/anthropify/adapter"
 )
 
 // ProviderKind identifies one of the supported backends.

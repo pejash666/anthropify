@@ -8,9 +8,9 @@ import (
 	"net/http"
 	"strings"
 
-	anthropicadapter "github.com/shahao/anthropify/adapter/anthropic"
-	geminiadapter "github.com/shahao/anthropify/adapter/gemini_native"
-	"github.com/shahao/anthropify/internal/schema"
+	anthropicadapter "github.com/pejash666/anthropify/adapter/anthropic"
+	geminiadapter "github.com/pejash666/anthropify/adapter/gemini_native"
+	"github.com/pejash666/anthropify/internal/schema"
 )
 
 // SchemaPolicy is the v0.2.0 client-global tool-schema normalisation

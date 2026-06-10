@@ -20,8 +20,8 @@ import (
 
 	anthropicsdk "github.com/anthropics/anthropic-sdk-go"
 
-	"github.com/shahao/anthropify/adapter"
-	"github.com/shahao/anthropify/internal/ssehelper"
+	"github.com/pejash666/anthropify/adapter"
+	"github.com/pejash666/anthropify/internal/ssehelper"
 )
 
 // GeminiMode selects which Google endpoint family + auth shape the

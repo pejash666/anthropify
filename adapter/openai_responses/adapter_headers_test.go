@@ -12,7 +12,7 @@ import (
 
 	anthropicsdk "github.com/anthropics/anthropic-sdk-go"
 
-	"github.com/shahao/anthropify/adapter"
+	"github.com/pejash666/anthropify/adapter"
 )
 
 // captured holds what the fake upstream observed on a single request.

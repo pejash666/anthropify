@@ -8,8 +8,8 @@ import (
 	"testing"
 
 	"github.com/anthropics/anthropic-sdk-go"
-	anthropify "github.com/shahao/anthropify"
-	"github.com/shahao/anthropify/e2e/helpers"
+	anthropify "github.com/pejash666/anthropify"
+	"github.com/pejash666/anthropify/e2e/helpers"
 )
 
 // TestE2E_Anthropic_BasicStream exercises the passthrough adapter with

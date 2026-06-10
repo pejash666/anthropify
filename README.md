@@ -7,7 +7,7 @@
 <p align="center"><i>The Anthropic SDK, for every LLM. In Go.</i></p>
 
 <p align="center">
-<a href="https://pkg.go.dev/github.com/shahao/anthropify"><img src="https://pkg.go.dev/badge/github.com/shahao/anthropify.svg" alt="Go Reference"></a>
+<a href="https://pkg.go.dev/github.com/pejash666/anthropify"><img src="https://pkg.go.dev/badge/github.com/pejash666/anthropify.svg" alt="Go Reference"></a>
 <a href="https://go.dev/"><img src="https://img.shields.io/badge/go-1.24%2B-00ADD8" alt="Go version"></a>
 <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License"></a>
 </p>
@@ -31,7 +31,7 @@ import (
     "os"
 
     "github.com/anthropics/anthropic-sdk-go"
-    ap "github.com/shahao/anthropify"
+    ap "github.com/pejash666/anthropify"
 )
 
 func main() {
@@ -460,7 +460,7 @@ ap.WithGemini(ap.GeminiConfig{
 ## Installation
 
 ```bash
-go get github.com/shahao/anthropify
+go get github.com/pejash666/anthropify
 ```
 
 Requires Go 1.24 or later.

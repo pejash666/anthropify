@@ -7,7 +7,7 @@ import (
 
 	anthropicsdk "github.com/anthropics/anthropic-sdk-go"
 
-	"github.com/shahao/anthropify/internal/schema"
+	"github.com/pejash666/anthropify/internal/schema"
 )
 
 // BuildRequest lowers an Anthropic MessageNewParams into the JSON body

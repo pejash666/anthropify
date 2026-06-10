@@ -8,12 +8,12 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 
-	"github.com/shahao/anthropify/adapter"
-	anthropicadapter "github.com/shahao/anthropify/adapter/anthropic"
-	chatadapter "github.com/shahao/anthropify/adapter/chat_completions"
-	geminiadapter "github.com/shahao/anthropify/adapter/gemini_native"
-	openairesponses "github.com/shahao/anthropify/adapter/openai_responses"
-	"github.com/shahao/anthropify/internal/schema"
+	"github.com/pejash666/anthropify/adapter"
+	anthropicadapter "github.com/pejash666/anthropify/adapter/anthropic"
+	chatadapter "github.com/pejash666/anthropify/adapter/chat_completions"
+	geminiadapter "github.com/pejash666/anthropify/adapter/gemini_native"
+	openairesponses "github.com/pejash666/anthropify/adapter/openai_responses"
+	"github.com/pejash666/anthropify/internal/schema"
 )
 
 // Client is the top-level entry point. Construct one with New.

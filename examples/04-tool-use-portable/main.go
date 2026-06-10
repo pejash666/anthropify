@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
-	ap "github.com/shahao/anthropify"
+	ap "github.com/pejash666/anthropify"
 )
 
 // portable defines a target provider plus the model name used against it.

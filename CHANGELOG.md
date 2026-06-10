@@ -16,7 +16,7 @@ and adds two new transport backends (AWS Bedrock, Azure OpenAI Responses).
 ### BREAKING
 
 - **Module renamed** from `github.com/shahao/hybridstream` to
-  `github.com/shahao/anthropify`. Downstream callers must update import paths
+  `github.com/pejash666/anthropify`. Downstream callers must update import paths
   and option-package aliases (`hybridstream.With...` → `anthropify.With...`).
 - **Multi-backend registries** replace the single-backend option model. Each
   protocol family (`Anthropic`, `OpenAIResponses`, `AnthropicCompat`,
@@ -95,5 +95,5 @@ and adds two new transport backends (AWS Bedrock, Azure OpenAI Responses).
 - The single-backend option layout from the pre-0.2 scaffold (superseded by
   named registries; see BREAKING above).
 
-[Unreleased]: https://github.com/shahao/anthropify/compare/v0.2.0-alpha...HEAD
-[0.2.0-alpha]: https://github.com/shahao/anthropify/releases/tag/v0.2.0-alpha
+[Unreleased]: https://github.com/pejash666/anthropify/compare/v0.2.0-alpha...HEAD
+[0.2.0-alpha]: https://github.com/pejash666/anthropify/releases/tag/v0.2.0-alpha

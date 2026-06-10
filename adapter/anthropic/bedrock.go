@@ -39,7 +39,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 
-	"github.com/shahao/anthropify/adapter"
+	"github.com/pejash666/anthropify/adapter"
 )
 
 // newBedrock validates Bedrock-mode credentials and constructs an

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/shahao/anthropify"
+	"github.com/pejash666/anthropify"
 )
 
 // newAnthropicClient builds a *anthropify.Client wired exclusively to

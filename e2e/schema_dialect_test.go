@@ -9,8 +9,8 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 
-	"github.com/shahao/anthropify"
-	"github.com/shahao/anthropify/e2e/helpers"
+	"github.com/pejash666/anthropify"
+	"github.com/pejash666/anthropify/e2e/helpers"
 )
 
 // TestE2E_SchemaDialect_Portable verifies that one Anthropic-shaped

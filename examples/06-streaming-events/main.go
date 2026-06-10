@@ -6,7 +6,7 @@ import (
 	"os"
 
 	"github.com/anthropics/anthropic-sdk-go"
-	ap "github.com/shahao/anthropify"
+	ap "github.com/pejash666/anthropify"
 )
 
 // Walks one streaming response and prints a one-line summary of every

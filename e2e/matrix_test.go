@@ -6,8 +6,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/shahao/anthropify"
-	"github.com/shahao/anthropify/e2e/helpers"
+	"github.com/pejash666/anthropify"
+	"github.com/pejash666/anthropify/e2e/helpers"
 )
 
 // TestE2E_Matrix_Consistency runs the same BasicTextPrompt against

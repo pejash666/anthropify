@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
-	ap "github.com/shahao/anthropify"
+	ap "github.com/pejash666/anthropify"
 )
 
 // Protocol != vendor. The Anthropic Messages API is a *protocol*, and

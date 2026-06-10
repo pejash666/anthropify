@@ -16,9 +16,9 @@ import (
 
 	anthropicsdk "github.com/anthropics/anthropic-sdk-go"
 
-	"github.com/shahao/anthropify/adapter"
-	"github.com/shahao/anthropify/internal/schema"
-	"github.com/shahao/anthropify/internal/ssehelper"
+	"github.com/pejash666/anthropify/adapter"
+	"github.com/pejash666/anthropify/internal/schema"
+	"github.com/pejash666/anthropify/internal/ssehelper"
 )
 
 // AnthropicMode selects which upstream the adapter dispatches to. The

@@ -1,4 +1,4 @@
-module github.com/shahao/anthropify
+module github.com/pejash666/anthropify
 
 go 1.24.3
 

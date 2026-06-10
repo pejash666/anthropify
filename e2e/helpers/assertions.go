@@ -11,7 +11,7 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 
-	"github.com/shahao/anthropify"
+	"github.com/pejash666/anthropify"
 )
 
 // StreamSummary distills a finished stream into the values every E2E

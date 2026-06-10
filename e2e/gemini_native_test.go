@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/anthropics/anthropic-sdk-go"
-	"github.com/shahao/anthropify/e2e/helpers"
+	"github.com/pejash666/anthropify/e2e/helpers"
 )
 
 // TestE2E_Gemini_BasicStream is the smoke test for gemini_native.

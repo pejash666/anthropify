@@ -6,7 +6,7 @@ import (
 	"os"
 
 	"github.com/anthropics/anthropic-sdk-go"
-	ap "github.com/shahao/anthropify"
+	ap "github.com/pejash666/anthropify"
 )
 
 func main() {
