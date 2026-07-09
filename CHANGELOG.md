@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-07-09
+
+General availability release. Promotes 0.2.0-alpha to GA: all eight
+supported providers — Anthropic, OpenAI Responses, Gemini Native, Kimi,
+GLM, MiniMax, Azure OpenAI, and AWS Bedrock — are now implemented and
+verified end-to-end against live upstream APIs.
+
+### Added since 0.2.0-alpha
+
+- **Azure OpenAI Responses e2e coverage.** `WithAzureOpenAI` previously
+  shipped with design docs and README sections only ("no e2e — no Azure
+  test account"); the backend now has full live e2e coverage
+  (`openai_responses_azure`) alongside the existing matrix-consistency
+  test.
+- **AWS Bedrock e2e coverage.** `WithAnthropicBedrock` previously shipped
+  undocumented in e2e ("no e2e — no Bedrock test account"); the backend
+  now has full live e2e coverage (`anthropic_bedrock`), including a
+  cache-hit regression test (`TestE2E_Bedrock_CacheControl_PerBlock_CacheHit`).
+- **Bedrock `cache_control` behavior corrected and verified live**
+  against `us-east-1` / `us.anthropic.claude-haiku-4-5-20251001-v1:0`:
+  - **Top-level** `cache_control` (the automatic-caching helper) is
+    forwarded verbatim but is **hard-rejected by Bedrock** with
+    `400 ValidationException: cache_control: Extra inputs are not
+    permitted` — this form does not work on Bedrock.
+  - **Per-block** `cache_control` (set directly on a `system` /
+    `messages` / `tools` content block) is accepted and caches
+    correctly, subject to a **per-model minimum token threshold**
+    (e.g. Claude Haiku 4.5 requires ≥4096 tokens per breakpoint).
+    Below the threshold, no `cache_creation_input_tokens` /
+    `cache_read_input_tokens` are reported — this is expected
+    threshold behavior, not a caching failure. Above the threshold,
+    caching behaves identically to native Anthropic (round1
+    `cache_creation_input_tokens=8732`, round2
+    `cache_read_input_tokens=8732` on the ~8700-token regression test).
+
+No breaking API changes relative to `0.2.0-alpha`; see that section
+below for the full feature set introduced in the pre-release.
+
 ## [0.2.0-alpha] - 2026-05-25
 
 First public pre-release. Establishes the multi-backend Anthropic-protocol
@@ -95,5 +133,6 @@ and adds two new transport backends (AWS Bedrock, Azure OpenAI Responses).
 - The single-backend option layout from the pre-0.2 scaffold (superseded by
   named registries; see BREAKING above).
 
-[Unreleased]: https://github.com/pejash666/anthropify/compare/v0.2.0-alpha...HEAD
+[Unreleased]: https://github.com/pejash666/anthropify/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/pejash666/anthropify/compare/v0.2.0-alpha...v0.2.0
 [0.2.0-alpha]: https://github.com/pejash666/anthropify/releases/tag/v0.2.0-alpha
