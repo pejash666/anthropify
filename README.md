@@ -271,11 +271,21 @@ A few notes:
   `BedrockConfig.ExtraHeaders["anthropic-beta"] = []string{"…"}`; the
   SDK's bedrock middleware lifts each value into the request body's
   `anthropic_beta` array because Bedrock rejects the HTTP header.
-- **`cache_control` on Bedrock.** Both per-block and v0.2.0 top-level
-  forms are forwarded verbatim. Bedrock's documented support for the
-  top-level form is currently limited; anthropify deliberately does
-  not strip the field, so as upstream support lands you get it for
-  free.
+- **`cache_control` on Bedrock.** The two forms behave differently:
+  - **Top-level** (the v0.2.0 `SetCacheControl` automatic-caching
+    helper) is forwarded verbatim, but Bedrock's schema hard-rejects
+    it with `400 ValidationException: cache_control: Extra inputs
+    are not permitted` — this form does not work on Bedrock.
+  - **Per-block** (`cache_control` set directly on a `system` /
+    `messages` / `tools` content block) is accepted and does cache.
+    Each cache checkpoint has a **per-model minimum token count**
+    (e.g. Claude Haiku 4.5 requires ≥4096 tokens per breakpoint);
+    below that threshold no `cache_creation_input_tokens` /
+    `cache_read_input_tokens` are reported. Above the threshold,
+    caching behaves identically to native Anthropic — verified live
+    against `us.anthropic.claude-haiku-4-5-20251001-v1:0` in
+    `us-east-1` via both a raw `aws bedrock-runtime invoke-model`
+    call and the anthropify Bedrock adapter.
 - **`SessionToken` is optional.** Set it only for STS-vended or
   AWS-SSO temporary credentials; long-lived IAM-user keys never have
   one. When set, anthropify threads it through SigV4 as
@@ -404,7 +414,7 @@ have no analogous request field:
 |-------------------|--------------------------------------------------|
 | Anthropic         | emits `{"cache_control":{"type":"ephemeral"}}`   |
 | MiniMax           | same wire body via the anthropic adapter         |
-| AWS Bedrock       | forwarded verbatim; honoured per Bedrock's evolving support — anthropify does not strip |
+| AWS Bedrock       | forwarded verbatim, but Bedrock rejects it with `400 ValidationException` — use per-block `cache_control` instead (see [AWS Bedrock integration](#aws-bedrock-integration)) |
 | OpenAI Responses  | no-op (auto-cached server-side, prompts >1024 t) |
 | Azure OpenAI      | no-op (auto-cached server-side, prompts >1024 t) |
 | Gemini Native     | no-op (Gemini 2.5+ implicit caching server-side) |
