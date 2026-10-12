@@ -197,6 +197,8 @@ A common protocol shape does not make all model capabilities identical.
 
 ## More Examples
 
+- [Use OpenAI and Gemini with Anthropic types](./anthropic-api-with-openai-gemini.md).
+- [Choose an embedded library or proxy server](./llm-library-vs-proxy.md).
 - [Configure multiple providers](../../examples/02-multi-provider).
 - [Portable tool use](../../examples/04-tool-use-portable).
 - [Consume thinking blocks](../../examples/05-thinking-blocks).
