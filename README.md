@@ -30,7 +30,7 @@ configured provider through `req.Model`. Your application consumes the same
 
 [API reference](https://pkg.go.dev/github.com/pejash666/anthropify) |
 [Runnable examples](./examples) |
-[Switch LLM providers mid-conversation in Go](./docs/guides/switch-llm-providers-in-go.md)
+[OpenAI and Gemini guide](./docs/guides/anthropic-api-with-openai-gemini.md)
 
 ### When to use Anthropify
 
@@ -41,6 +41,15 @@ configured provider through `req.Model`. Your application consumes the same
   message history.
 - Consume a consistent streaming format for text, tool calls and thinking,
   subject to each upstream model's capabilities.
+
+### Guides
+
+- [Use the Anthropic Messages API with OpenAI and Gemini in Go](./docs/guides/anthropic-api-with-openai-gemini.md):
+  provider setup, streaming, model aliases and endpoint configuration.
+- [Switch LLM providers mid-conversation in Go](./docs/guides/switch-llm-providers-in-go.md):
+  reuse text history across configured providers.
+- [Embedded LLM library or proxy server?](./docs/guides/llm-library-vs-proxy.md):
+  choose where protocol translation and operational controls belong.
 
 ## Quick start
 

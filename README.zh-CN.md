@@ -26,7 +26,7 @@ DeepSeek、AWS Bedrock 和 Azure OpenAI。它在进程内完成协议转换，�
 
 [API 文档](https://pkg.go.dev/github.com/pejash666/anthropify) |
 [可运行示例](./examples) |
-[在 Go 中跨模型切换对话（英文指南）](./docs/guides/switch-llm-providers-in-go.md)
+[OpenAI 与 Gemini 接入指南（英文）](./docs/guides/anthropic-api-with-openai-gemini.md)
 
 ### 适用场景
 
@@ -34,6 +34,15 @@ DeepSeek、AWS Bedrock 和 Azure OpenAI。它在进程内完成协议转换，�
 - 通过 Anthropic 形态的 API 调用 OpenAI 或 Gemini，无需部署代理服务。
 - 在文本对话中切换已配置的模型，复用同一份消息历史。
 - 使用一致的流式事件格式消费文本、工具调用和思考块；具体能力仍取决于上游模型。
+
+### 指南
+
+- [在 Go 中用 Anthropic Messages API 调用 OpenAI 与 Gemini（英文）](./docs/guides/anthropic-api-with-openai-gemini.md)：
+  提供商配置、流式调用、模型别名和自定义端点。
+- [在 Go 中跨模型切换对话（英文）](./docs/guides/switch-llm-providers-in-go.md)：
+  在已配置的提供商之间复用文本消息历史。
+- [选择嵌入式 LLM 库还是代理服务（英文）](./docs/guides/llm-library-vs-proxy.md)：
+  明确协议转换、凭据、限额、重试和运维能力的归属。
 
 ## 快速开始
 
