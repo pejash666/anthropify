@@ -2,9 +2,9 @@
 
 <p align="center"><img src="./assets/banner.png" alt="Anthropify" width="640"></p>
 
-<h1 align="center">Anthropify</h1>
+<h1 align="center">Anthropify：Go 多模型 LLM 协议适配库</h1>
 
-<p align="center"><i>用 Anthropic 的 API 形态调用所有 LLM，Go 原生。</i></p>
+<p align="center"><i>用 Anthropic Messages API 调用 OpenAI、Gemini、Kimi、DeepSeek 等模型，无需代理服务。</i></p>
 
 <p align="center">
 <a href="https://pkg.go.dev/github.com/pejash666/anthropify"><img src="https://pkg.go.dev/badge/github.com/pejash666/anthropify.svg" alt="Go Reference"></a>
@@ -14,11 +14,26 @@
 
 ## 这是什么？
 
-Anthropify 是一个 Go 库，让你用 Anthropic Messages API 的形态去调用 OpenAI、
-Gemini、Kimi、GLM、MiniMax、DeepSeek 等多家 LLM 提供商。它在进程内完成协议转换、SSE
-流式传输、tool use、thinking 块和 `cache_control` —— 前面不需要任何代理服务。
-调用方始终只面对 `anthropic.MessageNewParams` 和
-`anthropic.MessageStreamEventUnion`。
+Anthropify 是一个开源 Go 库，使用官方
+[`anthropic-sdk-go`](https://github.com/anthropics/anthropic-sdk-go)
+的请求与响应类型，调用 Anthropic、OpenAI、Gemini、Kimi、GLM、MiniMax、
+DeepSeek、AWS Bedrock 和 Azure OpenAI。它在进程内完成协议转换，将 SSE
+流式事件、工具调用和思考块统一为 Anthropic Messages API 的形态，无需部署
+代理服务器或独立服务。提示词缓存仍有提供商差异，详见[提示词缓存](#prompt-caching)。
+
+应用可以维护同一份 `[]anthropic.MessageParam` 对话历史，通过 `req.Model`
+选择已配置的提供商，并始终消费 `anthropic.MessageStreamEventUnion` 流式事件。
+
+[API 文档](https://pkg.go.dev/github.com/pejash666/anthropify) |
+[可运行示例](./examples) |
+[在 Go 中跨模型切换对话（英文指南）](./docs/guides/switch-llm-providers-in-go.md)
+
+### 适用场景
+
+- 为 Go Agent 统一多家 LLM 提供商的消息格式。
+- 通过 Anthropic 形态的 API 调用 OpenAI 或 Gemini，无需部署代理服务。
+- 在文本对话中切换已配置的模型，复用同一份消息历史。
+- 使用一致的流式事件格式消费文本、工具调用和思考块；具体能力仍取决于上游模型。
 
 ## 快速开始
 
@@ -78,10 +93,10 @@ msg, err := client.CreateMessage(ctx, req)
 
 ## 实战演示
 
-Anthropify 的核心主张是：一份 Anthropic 规范形态的对话切片，可以在中途任意切
-换 provider。为了证明这一点，[example 03](./examples/03-model-hot-switching)
-让一段对话先后流过四个上游——Claude 规划、Kimi 写代码、GLM 翻译、Claude 收
-尾——全程不重建消息历史。每一轮唯一变化的字段是 `req.Model`。
+Anthropify 在应用侧保留 Anthropic 规范形态的对话，由适配器转换为各家上游协议。
+[example 03](./examples/03-model-hot-switching) 用四轮文本对话切换三家提供商：
+Claude 规划、Kimi 写代码、GLM 翻译、Claude 收尾。全程复用消息历史，每轮选择
+`req.Model` 和对应的 token 预算。
 
 <p align="center"><img src="./examples/03-model-hot-switching/flow.png" alt="model hot-switching" width="720"></p>
 
@@ -95,6 +110,9 @@ for _, t := range turns {
 ```
 
 > 完整可运行版本见 [examples/03-model-hot-switching](./examples/03-model-hot-switching)。
+
+提供商注册、模型路由和跨模型兼容性边界的完整说明，见
+[在 Go 中跨模型切换对话（英文指南）](./docs/guides/switch-llm-providers-in-go.md)。
 
 ## 为什么选 Anthropic 作为标准形态？
 

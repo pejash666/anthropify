@@ -3,12 +3,12 @@
 ![header](./header.png)
 
 > **The whole reason Anthropify exists.**
-> One conversation. Four providers. The context never resets.
+> One text conversation. Four turns. Three providers. Shared history.
 
 ## What it shows
 
 A single `[]anthropic.MessageParam` slice is passed through four turns.
-Between turns, only `req.Model` changes:
+Each turn selects `req.Model` and its token budget:
 
 | Turn | Provider | Model | Job |
 |------|----------|-------|-----|
@@ -17,10 +17,14 @@ Between turns, only `req.Model` changes:
 | 3 | GLM | `glm-5.1` | translate to Japanese |
 | 4 | Anthropic | `claude-sonnet-4-5` | summarise everything |
 
-Because every provider speaks the Anthropic-canonical message shape, the
-prior assistant turns are just appended to the slice and re-sent. There is
-no per-provider context translation, no "history adapter", no shadow
-state. The conversation is the conversation.
+Application code retains the Anthropic-canonical message shape; provider
+adapters translate it to upstream protocols. Prior assistant text is
+appended to the same slice and re-sent, so application code does not need a
+separate history per provider. This text example does not demonstrate
+cross-provider replay of thinking signatures, images or tool transcripts.
+
+For provider setup and a step-by-step walkthrough, see
+[Switch LLM Providers Mid-Conversation in Go](../../docs/guides/switch-llm-providers-in-go.md).
 
 ![flow](./flow.png)
 

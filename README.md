@@ -2,9 +2,9 @@
 
 <p align="center"><img src="./assets/banner.png" alt="Anthropify" width="640"></p>
 
-<h1 align="center">Anthropify</h1>
+<h1 align="center">Anthropify: A Multi-Provider LLM Library for Go</h1>
 
-<p align="center"><i>The Anthropic SDK, for every LLM. In Go.</i></p>
+<p align="center"><i>Use the Anthropic Messages API with OpenAI, Gemini, Kimi, DeepSeek and more. No proxy server required.</i></p>
 
 <p align="center">
 <a href="https://pkg.go.dev/github.com/pejash666/anthropify"><img src="https://pkg.go.dev/badge/github.com/pejash666/anthropify.svg" alt="Go Reference"></a>
@@ -14,11 +14,33 @@
 
 ## What is this?
 
-Anthropify is a Go library that lets you talk to OpenAI, Gemini, Kimi, GLM,
-MiniMax, DeepSeek and other LLM providers through the Anthropic Messages API
-shape. It does protocol translation, SSE streaming, tool use, thinking blocks
-and `cache_control` in-process — no proxy server in front. Callers only ever
-see `anthropic.MessageNewParams` and `anthropic.MessageStreamEventUnion`.
+Anthropify is an open-source Go library for calling Anthropic, OpenAI,
+Gemini, Kimi, GLM, MiniMax, DeepSeek, AWS Bedrock and Azure OpenAI with the
+request and response types from the official
+[`anthropic-sdk-go`](https://github.com/anthropics/anthropic-sdk-go).
+It translates provider protocols in-process and normalizes SSE streaming,
+tool use and thinking blocks into the Anthropic Messages API shape.
+Prompt-caching behavior remains provider-specific; see
+[prompt caching](#prompt-caching). No proxy server or separate service is
+required.
+
+Keep one `[]anthropic.MessageParam` conversation history and select a
+configured provider through `req.Model`. Your application consumes the same
+`anthropic.MessageStreamEventUnion` events across providers.
+
+[API reference](https://pkg.go.dev/github.com/pejash666/anthropify) |
+[Runnable examples](./examples) |
+[Switch LLM providers mid-conversation in Go](./docs/guides/switch-llm-providers-in-go.md)
+
+### When to use Anthropify
+
+- Build a Go agent with one message format across multiple LLM providers.
+- Use OpenAI or Gemini behind an Anthropic-shaped API without deploying a
+  proxy.
+- Switch between configured models while reusing a text conversation's
+  message history.
+- Consume a consistent streaming format for text, tool calls and thinking,
+  subject to each upstream model's capabilities.
 
 ## Quick start
 
@@ -78,11 +100,11 @@ msg, err := client.CreateMessage(ctx, req)
 
 ## See it in action
 
-Anthropify's claim is that one Anthropic-canonical conversation slice can
-flow through any provider mid-thread. To prove it, [example 03](./examples/03-model-hot-switching)
-runs a single chat across four upstreams — Claude plans, Kimi codes, GLM
-translates, Claude summarises — without ever rebuilding the message
-history. The only field that changes between turns is `req.Model`.
+Anthropify keeps the application's conversation in Anthropic-canonical
+form while adapters translate it for each upstream. [Example 03](./examples/03-model-hot-switching)
+runs a text chat across four turns and three providers: Claude plans, Kimi
+codes, GLM translates, then Claude summarises. It reuses the message history
+throughout; each turn selects `req.Model` and its token budget.
 
 <p align="center"><img src="./examples/03-model-hot-switching/flow.png" alt="model hot-switching" width="720"></p>
 
@@ -96,6 +118,9 @@ for _, t := range turns {
 ```
 
 > See [examples/03-model-hot-switching](./examples/03-model-hot-switching) for the full runnable example.
+
+For a walkthrough of provider registration, model routes and portability
+limits, read [Switch LLM providers mid-conversation in Go](./docs/guides/switch-llm-providers-in-go.md).
 
 ## Why Anthropic-canonical?
 

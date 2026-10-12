@@ -1,7 +1,15 @@
-// Package anthropify provides a unified Anthropic-protocol facade over
-// multiple LLM providers. All public request and response types are aliases
-// to github.com/anthropics/anthropic-sdk-go so callers need only learn the
-// Anthropic Messages API.
+// Package anthropify is a Go library for using the Anthropic Messages API
+// with Anthropic, OpenAI, Gemini and OpenAI-compatible LLM providers.
+//
+// Message request and response types are aliases to
+// github.com/anthropics/anthropic-sdk-go. Provider adapters translate requests
+// in-process and normalize streaming text, tool use and thinking events into
+// Anthropic-shaped content blocks, without requiring a proxy server.
+//
+// Construct a Client with New and provider options such as WithAnthropic,
+// WithOpenAI, WithGemini or WithChatCompletion. Use WithModelRoute to route
+// model names to configured backends. CreateMessageStream returns canonical
+// streaming events; CreateMessage returns an assembled Message.
 package anthropify
 
 import (
