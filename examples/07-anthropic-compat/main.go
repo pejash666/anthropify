@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
-	ap "github.com/pejash666/anthropify"
+	tm "github.com/pejash666/turnmeld"
 )
 
 // Protocol != vendor. The Anthropic Messages API is a *protocol*, and
@@ -16,22 +16,22 @@ import (
 // in-process adapter, then dispatch by model prefix without changing a
 // single line of caller code.
 func main() {
-	client, err := ap.New(
+	client, err := tm.New(
 		// Default-named "anthropic" slot — sugar for
 		// WithAnthropicCompat("anthropic", cfg). Picks up the built-in
 		// claude-* prefix route.
-		ap.WithAnthropic(ap.AnthropicConfig{
+		tm.WithAnthropic(tm.AnthropicConfig{
 			APIKey: os.Getenv("ANTHROPIC_API_KEY"),
 		}),
 		// Second backend on the same anthropic protocol.
-		ap.WithAnthropicCompat("minimax", ap.AnthropicConfig{
+		tm.WithAnthropicCompat("minimax", tm.AnthropicConfig{
 			BaseURL: envOr("MINIMAX_BASE_URL", "https://api.minimax.io/anthropic"),
 			APIKey:  os.Getenv("MINIMAX_API_KEY"),
 		}),
 		// Pin the MiniMax- model prefix to the "minimax" backend so the
 		// dispatcher does not confuse it with real Claude.
-		ap.WithModelRoute("MiniMax-", ap.Route{
-			Provider: ap.ProviderAnthropic, Backend: "minimax",
+		tm.WithModelRoute("MiniMax-", tm.Route{
+			Provider: tm.ProviderAnthropic, Backend: "minimax",
 		}),
 	)
 	if err != nil {
@@ -48,7 +48,7 @@ func main() {
 	}
 }
 
-func ask(client *ap.Client, model, question string) {
+func ask(client *tm.Client, model, question string) {
 	stream, err := client.CreateMessageStream(context.Background(), anthropic.MessageNewParams{
 		Model:     anthropic.Model(model),
 		MaxTokens: 256,

@@ -1,8 +1,8 @@
-# Anthropify Examples
+# Turnmeld Examples
 
 ![banner](./banner.png)
 
-A tour of what Anthropify can do. Every example is a standalone Go
+A tour of what Turnmeld can do. Every example is a standalone Go
 program that runs against real upstream APIs (no mocks).
 
 ## Index

@@ -1,4 +1,4 @@
-// Package anthropify is a Go library for using the Anthropic Messages API
+// Package turnmeld is a Go library for using the Anthropic Messages API
 // with Anthropic, OpenAI, Gemini and OpenAI-compatible LLM providers.
 //
 // Message request and response types are aliases to
@@ -10,7 +10,7 @@
 // WithOpenAI, WithGemini or WithChatCompletion. Use WithModelRoute to route
 // model names to configured backends. CreateMessageStream returns canonical
 // streaming events; CreateMessage returns an assembled Message.
-package anthropify
+package turnmeld
 
 import (
 	"encoding/json"
@@ -18,7 +18,7 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 
-	"github.com/pejash666/anthropify/adapter"
+	"github.com/pejash666/turnmeld/adapter"
 )
 
 // ProviderKind identifies one of the supported backends.
@@ -52,13 +52,13 @@ type MessageStreamEventUnion = anthropic.MessageStreamEventUnion
 var (
 	// ErrProviderNotConfigured is returned when routing selects a provider
 	// that was never registered via the functional options.
-	ErrProviderNotConfigured = errors.New("anthropify: provider not configured")
+	ErrProviderNotConfigured = errors.New("turnmeld: provider not configured")
 	// ErrUnknownModel is returned when no route rule matches the request
 	// model and no override is installed.
-	ErrUnknownModel = errors.New("anthropify: unable to route model")
+	ErrUnknownModel = errors.New("turnmeld: unable to route model")
 	// ErrStreamClosed is returned by StreamReader when the upstream stream
 	// has been fully consumed.
-	ErrStreamClosed = errors.New("anthropify: stream closed")
+	ErrStreamClosed = errors.New("turnmeld: stream closed")
 	// ErrUnsupported is returned by adapters that lack a native
 	// non-streaming endpoint. The top-level Client uses errors.Is to
 	// detect this sentinel and falls back to draining Stream. It is an

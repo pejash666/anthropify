@@ -1,20 +1,24 @@
 > English | [简体中文](./README.zh-CN.md)
 
-<p align="center"><img src="./assets/banner.png" alt="Anthropify" width="640"></p>
+<p align="center"><img src="./assets/banner.png" alt="Turnmeld" width="640"></p>
 
-<h1 align="center">Anthropify: A Multi-Provider LLM Library for Go</h1>
+<h1 align="center">Turnmeld: A Multi-Provider LLM Library for Go</h1>
 
 <p align="center"><i>Use the Anthropic Messages API with OpenAI, Gemini, Kimi, DeepSeek and more. No proxy server required.</i></p>
 
+Turnmeld was formerly named Anthropify. New installations use
+`github.com/pejash666/turnmeld` from v0.3.0 onward. Existing users should
+follow the [migration guide](./docs/guides/migrate-to-turnmeld.md).
+
 <p align="center">
-<a href="https://pkg.go.dev/github.com/pejash666/anthropify"><img src="https://pkg.go.dev/badge/github.com/pejash666/anthropify.svg" alt="Go Reference"></a>
+<a href="https://pkg.go.dev/github.com/pejash666/turnmeld"><img src="https://pkg.go.dev/badge/github.com/pejash666/turnmeld.svg" alt="Go Reference"></a>
 <a href="https://go.dev/"><img src="https://img.shields.io/badge/go-1.24%2B-00ADD8" alt="Go version"></a>
 <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License"></a>
 </p>
 
 ## What is this?
 
-Anthropify is an open-source Go library for calling Anthropic, OpenAI,
+Turnmeld is an open-source Go library for calling Anthropic, OpenAI,
 Gemini, Kimi, GLM, MiniMax, DeepSeek, AWS Bedrock and Azure OpenAI with the
 request and response types from the official
 [`anthropic-sdk-go`](https://github.com/anthropics/anthropic-sdk-go).
@@ -28,11 +32,11 @@ Keep one `[]anthropic.MessageParam` conversation history and select a
 configured provider through `req.Model`. Your application consumes the same
 `anthropic.MessageStreamEventUnion` events across providers.
 
-[API reference](https://pkg.go.dev/github.com/pejash666/anthropify) |
+[API reference](https://pkg.go.dev/github.com/pejash666/turnmeld) |
 [Runnable examples](./examples) |
 [OpenAI and Gemini guide](./docs/guides/anthropic-api-with-openai-gemini.md)
 
-### When to use Anthropify
+### When to use Turnmeld
 
 - Build a Go agent with one message format across multiple LLM providers.
 - Use OpenAI or Gemini behind an Anthropic-shaped API without deploying a
@@ -62,17 +66,17 @@ import (
     "os"
 
     "github.com/anthropics/anthropic-sdk-go"
-    ap "github.com/pejash666/anthropify"
+    tm "github.com/pejash666/turnmeld"
 )
 
 func main() {
-    client, err := ap.New(
-        ap.WithChatCompletion("kimi", ap.OpenAICompatConfig{
+    client, err := tm.New(
+        tm.WithChatCompletion("kimi", tm.OpenAICompatConfig{
             BaseURL: "https://api.moonshot.cn/v1",
             APIKey:  os.Getenv("KIMI_API_KEY"),
         }),
-        ap.WithModelRoute("kimi-", ap.Route{
-            Provider: ap.ProviderChatCompletions,
+        tm.WithModelRoute("kimi-", tm.Route{
+            Provider: tm.ProviderChatCompletions,
             Backend:  "kimi",
         }),
     )
@@ -109,7 +113,7 @@ msg, err := client.CreateMessage(ctx, req)
 
 ## See it in action
 
-Anthropify keeps the application's conversation in Anthropic-canonical
+Turnmeld keeps the application's conversation in Anthropic-canonical
 form while adapters translate it for each upstream. [Example 03](./examples/03-model-hot-switching)
 runs a text chat across four turns and three providers: Claude plans, Kimi
 codes, GLM translates, then Claude summarises. It reuses the message history
@@ -149,7 +153,7 @@ the canonical event format affects every downstream agent.
   bookkeeping without making the wire shape easier to consume.
 
 For an agent framework that needs a stable internal event vocabulary, the
-Anthropic shape sits at a useful point on the granularity curve. Anthropify
+Anthropic shape sits at a useful point on the granularity curve. Turnmeld
 adopts it as the canonical form and normalises every provider into it.
 
 ## Supported providers
@@ -198,7 +202,7 @@ adopts it as the canonical form and normalises every provider into it.
 > model field carry the deployment name). See the [Azure OpenAI
 > integration](#azure-openai-integration) section below.
 
-> Anthropify recommends `gemini-3.5-flash` (or any Gemini 3.x flash
+> Turnmeld recommends `gemini-3.5-flash` (or any Gemini 3.x flash
 > variant). The adapter emits `thinkingLevel` in
 > `generationConfig.thinkingConfig`, which the 2.5 series rejects with
 > HTTP 400, so plan to use the 3.x family. Pro-series models
@@ -230,12 +234,12 @@ anthropic adapter as real Claude via
 `WithAnthropicCompat(name, AnthropicConfig{...})`, then route by prefix:
 
 ```go
-ap.WithAnthropicCompat("minimax", ap.AnthropicConfig{
+tm.WithAnthropicCompat("minimax", tm.AnthropicConfig{
     BaseURL: "https://api.minimax.io/anthropic",
     APIKey:  os.Getenv("MINIMAX_API_KEY"),
 })
-ap.WithModelRoute("MiniMax-", ap.Route{
-    Provider: ap.ProviderAnthropic, Backend: "minimax",
+tm.WithModelRoute("MiniMax-", tm.Route{
+    Provider: tm.ProviderAnthropic, Backend: "minimax",
 })
 ```
 
@@ -245,7 +249,7 @@ The two backends share one adapter and one routing table — see
 ## AWS Bedrock integration
 
 AWS Bedrock is the third backend on the Anthropic-protocol family.
-Anthropify delegates every Bedrock-specific concern (SigV4 request
+Turnmeld delegates every Bedrock-specific concern (SigV4 request
 signing, the `/model/{id}/invoke[-with-response-stream]` URL rewrite,
 the `anthropic_version: bedrock-2023-05-31` body injection, the
 `anthropic-beta` header → `anthropic_beta` body translation, and the
@@ -264,18 +268,18 @@ like `arn:aws:bedrock:us-east-1:123456789012:application-inference-profile/abcde
 `Route.UpstreamModel` rewrite it on dispatch.
 
 ```go
-client, err := ap.New(
-    ap.WithAnthropic(ap.AnthropicConfig{
+client, err := tm.New(
+    tm.WithAnthropic(tm.AnthropicConfig{
         APIKey: os.Getenv("ANTHROPIC_API_KEY"),
     }),
-    ap.WithAnthropicBedrock("bedrock", ap.BedrockConfig{
+    tm.WithAnthropicBedrock("bedrock", tm.BedrockConfig{
         AccessKeyID:     os.Getenv("AWS_ACCESS_KEY_ID"),
         SecretAccessKey: os.Getenv("AWS_SECRET_ACCESS_KEY"),
         // SessionToken is optional: only set for STS / SSO temporary keys.
         Region: "us-east-1",
     }),
-    ap.WithModelRoute("claude-opus-4-5", ap.Route{
-        Provider:      ap.ProviderAnthropic,
+    tm.WithModelRoute("claude-opus-4-5", tm.Route{
+        Provider:      tm.ProviderAnthropic,
         Backend:       "bedrock",
         UpstreamModel: "anthropic.claude-opus-4-5-20250929-v1:0",
     }),
@@ -319,14 +323,14 @@ A few notes:
     caching behaves identically to native Anthropic — verified live
     against `us.anthropic.claude-haiku-4-5-20251001-v1:0` in
     `us-east-1` via both a raw `aws bedrock-runtime invoke-model`
-    call and the anthropify Bedrock adapter.
+    call and the turnmeld Bedrock adapter.
 - **`SessionToken` is optional.** Set it only for STS-vended or
   AWS-SSO temporary credentials; long-lived IAM-user keys never have
-  one. When set, anthropify threads it through SigV4 as
+  one. When set, turnmeld threads it through SigV4 as
   `X-Amz-Security-Token`.
 - **Multiple AWS accounts.** Register one
   `WithAnthropicBedrock("aws-prod", …)` per account and route
-  different model prefixes at each. Anthropify intentionally does not
+  different model prefixes at each. Turnmeld intentionally does not
   embed a load-balancer in the protocol shim.
 
 See `docs/design/v0.2.0-aws-bedrock.md` for the full design rationale.
@@ -334,7 +338,7 @@ See `docs/design/v0.2.0-aws-bedrock.md` for the full design rationale.
 ## Azure OpenAI integration
 
 Azure OpenAI is the second backend on the OpenAI Responses-protocol
-family. Anthropify routes Azure traffic through the same
+family. Turnmeld routes Azure traffic through the same
 `adapter/openai_responses` code path as vanilla OpenAI — the
 canonical `BuildRequest` and the SSE → Anthropic event converter are
 shared verbatim. Only two things differ at the network boundary:
@@ -342,11 +346,11 @@ shared verbatim. Only two things differ at the network boundary:
 - **URL composition.** Azure exposes Responses under
   `<resource>/openai/responses?api-version=…` (deployment-less) or
   `<resource>/openai/deployments/<deployment>/responses?api-version=…`
-  (deployment-bound). Anthropify auto-picks based on whether
+  (deployment-bound). Turnmeld auto-picks based on whether
   `AzureOpenAIConfig.Deployment` is set.
 - **Authentication.** Azure historically uses an `api-key` header for
   resource keys; Entra/AAD access tokens use `Authorization: Bearer`;
-  APIM gateways may strip one or the other. Anthropify sends *both*
+  APIM gateways may strip one or the other. Turnmeld sends *both*
   on every request so a single `APIKey` value works regardless of
   whether you supplied a resource key or an AAD token.
 
@@ -357,15 +361,15 @@ prefixes (or exact model names) at it via the standard
 `WithModelRoute` so callers keep using canonical short model names:
 
 ```go
-client, err := ap.New(
-    ap.WithAzureOpenAI("azure", ap.AzureOpenAIConfig{
+client, err := tm.New(
+    tm.WithAzureOpenAI("azure", tm.AzureOpenAIConfig{
         BaseURL:    "https://my-resource.openai.azure.com",
         APIKey:     os.Getenv("AZURE_OPENAI_API_KEY"),
         APIVersion: "2025-03-01-preview",
         Deployment: "gpt-5-deployment",
     }),
-    ap.WithModelRoute("gpt-5", ap.Route{
-        Provider: ap.ProviderOpenAIResponses,
+    tm.WithModelRoute("gpt-5", tm.Route{
+        Provider: tm.ProviderOpenAIResponses,
         Backend:  "azure",
     }),
 )
@@ -385,7 +389,7 @@ msg, err := client.CreateMessage(ctx, req) // routed to the "azure" backend
 
 A few notes:
 
-- **`APIVersion` is required.** Anthropify deliberately does not pick
+- **`APIVersion` is required.** Turnmeld deliberately does not pick
   a default `?api-version=` value so upgrades stay visible in source
   control. Use the version your Azure resource is pinned to (e.g.
   `2025-03-01-preview`).
@@ -403,7 +407,7 @@ A few notes:
   side, identical to vanilla OpenAI Responses.
 - **Multiple deployments.** Register one
   `WithAzureOpenAI("azure-gpt5", …)` per deployment and route
-  different model prefixes at each. Anthropify intentionally does not
+  different model prefixes at each. Turnmeld intentionally does not
   embed routing logic in the adapter.
 
 See `docs/design/v0.2.0-azure-responses.md` for the full design
@@ -411,7 +415,7 @@ rationale.
 
 ## Prompt caching
 
-Anthropify supports both Anthropic prompt-caching modes:
+Turnmeld supports both Anthropic prompt-caching modes:
 
 - **Top-level automatic** (v0.2.0+). One toggle on the request, the
   upstream picks the optimal cache breakpoint and slides it forward
@@ -424,7 +428,7 @@ Anthropify supports both Anthropic prompt-caching modes:
       System:    longSystemPrompt, // big shared context
       Messages:  conversation,
   }
-  ap.SetCacheControl(&req, ap.CacheControl{Type: ap.CacheControlEphemeral})
+  tm.SetCacheControl(&req, tm.CacheControl{Type: tm.CacheControlEphemeral})
   msg, err := client.CreateMessage(ctx, req)
   ```
 
@@ -477,24 +481,24 @@ the original heuristic (project+location implies Vertex, otherwise Studio).
 
 ```go
 // Studio
-ap.WithGemini(ap.GeminiConfig{
-    Mode:   ap.GeminiModeStudio,
+tm.WithGemini(tm.GeminiConfig{
+    Mode:   tm.GeminiModeStudio,
     APIKey: os.Getenv("GEMINI_API_KEY"),
 })
 ```
 
 ```go
 // Express (Vertex with API key)
-ap.WithGemini(ap.GeminiConfig{
-    Mode:   ap.GeminiModeExpress,
+tm.WithGemini(tm.GeminiConfig{
+    Mode:   tm.GeminiModeExpress,
     APIKey: os.Getenv("VERTEX_EXPRESS_KEY"), // AQ.*
 })
 ```
 
 ```go
 // Vertex (OAuth2)
-ap.WithGemini(ap.GeminiConfig{
-    Mode:     ap.GeminiModeVertex,
+tm.WithGemini(tm.GeminiConfig{
+    Mode:     tm.GeminiModeVertex,
     Project:  os.Getenv("VERTEX_PROJECT"),
     Location: os.Getenv("VERTEX_LOCATION"),
     APIKey:   bearerToken, // gcloud auth print-access-token
@@ -504,14 +508,14 @@ ap.WithGemini(ap.GeminiConfig{
 ## Installation
 
 ```bash
-go get github.com/pejash666/anthropify
+go get github.com/pejash666/turnmeld@v0.3.0
 ```
 
 Requires Go 1.24 or later.
 
-## How Anthropify compares
+## How Turnmeld compares
 
-Anthropify is intentionally narrow: a Go library that converts between
+Turnmeld is intentionally narrow: a Go library that converts between
 Anthropic-canonical events and provider-native protocols. It is not a proxy
 server, not a routing layer, not a multi-tenant gateway, and ships no
 `cmd/`, no YAML, and no daemon.
@@ -520,7 +524,7 @@ If you need a hosted proxy with auth, rate-limiting, billing, and
 multi-tenancy out of the box, LiteLLM is a more complete solution and is
 Python-first. If you need a Go-native library to embed inside an agent —
 with first-party streaming, tool use, and the Anthropic canonical event
-shape — Anthropify is built for that.
+shape — Turnmeld is built for that.
 
 ## Status
 

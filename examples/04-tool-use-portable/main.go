@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
-	ap "github.com/pejash666/anthropify"
+	tm "github.com/pejash666/turnmeld"
 )
 
 // portable defines a target provider plus the model name used against it.
@@ -18,24 +18,24 @@ type portable struct {
 }
 
 func main() {
-	client, err := ap.New(
-		ap.WithAnthropic(ap.AnthropicConfig{APIKey: os.Getenv("ANTHROPIC_API_KEY")}),
-		ap.WithOpenAI(ap.OpenAIConfig{APIKey: os.Getenv("OPENAI_API_KEY")}),
-		ap.WithGemini(ap.GeminiConfig{
-			Mode:   ap.GeminiModeStudio,
+	client, err := tm.New(
+		tm.WithAnthropic(tm.AnthropicConfig{APIKey: os.Getenv("ANTHROPIC_API_KEY")}),
+		tm.WithOpenAI(tm.OpenAIConfig{APIKey: os.Getenv("OPENAI_API_KEY")}),
+		tm.WithGemini(tm.GeminiConfig{
+			Mode:   tm.GeminiModeStudio,
 			APIKey: os.Getenv("GEMINI_API_KEY"),
 		}),
-		ap.WithChatCompletion("kimi", ap.OpenAICompatConfig{
+		tm.WithChatCompletion("kimi", tm.OpenAICompatConfig{
 			BaseURL: envOr("KIMI_BASE_URL", "https://api.moonshot.ai/v1"),
 			APIKey:  os.Getenv("KIMI_API_KEY"),
 		}),
-		ap.WithModelRoute("kimi-", ap.Route{Provider: ap.ProviderChatCompletions, Backend: "kimi"}),
+		tm.WithModelRoute("kimi-", tm.Route{Provider: tm.ProviderChatCompletions, Backend: "kimi"}),
 		// v0.2.0: Lossy lets the per-dialect normalizer rewrite the
 		// schema in documented ways (e.g. drop additionalProperties for
 		// Gemini, downgrade additionalProperties:true for OpenAI Strict)
 		// while logging each transform via slog.Warn. The default,
 		// SchemaPolicyStrict, would error on any of these downgrades.
-		ap.WithSchemaPolicy(ap.SchemaPolicyLossy),
+		tm.WithSchemaPolicy(tm.SchemaPolicyLossy),
 	)
 	if err != nil {
 		panic(err)
@@ -96,7 +96,7 @@ func main() {
 	}
 }
 
-func runRoundTrip(client *ap.Client, model string, tools []anthropic.ToolUnionParam) {
+func runRoundTrip(client *tm.Client, model string, tools []anthropic.ToolUnionParam) {
 	ctx := context.Background()
 
 	// Round 1: ask the question, expect a tool_use block.

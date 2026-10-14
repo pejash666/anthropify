@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
-	ap "github.com/pejash666/anthropify"
+	tm "github.com/pejash666/turnmeld"
 )
 
 // turn binds a user question to the model that should answer it. The
@@ -21,18 +21,18 @@ type turn struct {
 }
 
 func main() {
-	client, err := ap.New(
-		ap.WithAnthropic(ap.AnthropicConfig{APIKey: os.Getenv("ANTHROPIC_API_KEY")}),
-		ap.WithChatCompletion("kimi", ap.OpenAICompatConfig{
+	client, err := tm.New(
+		tm.WithAnthropic(tm.AnthropicConfig{APIKey: os.Getenv("ANTHROPIC_API_KEY")}),
+		tm.WithChatCompletion("kimi", tm.OpenAICompatConfig{
 			BaseURL: envOr("KIMI_BASE_URL", "https://api.moonshot.ai/v1"),
 			APIKey:  os.Getenv("KIMI_API_KEY"),
 		}),
-		ap.WithChatCompletion("glm", ap.OpenAICompatConfig{
+		tm.WithChatCompletion("glm", tm.OpenAICompatConfig{
 			BaseURL: envOr("GLM_BASE_URL", "https://open.bigmodel.cn/api/paas/v4"),
 			APIKey:  os.Getenv("GLM_API_KEY"),
 		}),
-		ap.WithModelRoute("kimi-", ap.Route{Provider: ap.ProviderChatCompletions, Backend: "kimi"}),
-		ap.WithModelRoute("glm-", ap.Route{Provider: ap.ProviderChatCompletions, Backend: "glm"}),
+		tm.WithModelRoute("kimi-", tm.Route{Provider: tm.ProviderChatCompletions, Backend: "kimi"}),
+		tm.WithModelRoute("glm-", tm.Route{Provider: tm.ProviderChatCompletions, Backend: "glm"}),
 	)
 	if err != nil {
 		panic(err)
@@ -98,7 +98,7 @@ func main() {
 	}
 }
 
-func runTurn(client *ap.Client, model string, maxTokens int64, messages []anthropic.MessageParam) (string, error) {
+func runTurn(client *tm.Client, model string, maxTokens int64, messages []anthropic.MessageParam) (string, error) {
 	stream, err := client.CreateMessageStream(context.Background(), anthropic.MessageNewParams{
 		Model:     anthropic.Model(model),
 		MaxTokens: maxTokens,

@@ -4,7 +4,7 @@
 
 A guided tour of the six event types that flow over an Anthropic SSE
 stream. Useful as a reference when you want to understand exactly what
-Anthropify is delivering to your client code.
+Turnmeld is delivering to your client code.
 
 ## What it shows
 

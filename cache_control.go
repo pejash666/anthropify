@@ -1,4 +1,4 @@
-package anthropify
+package turnmeld
 
 // Top-level Anthropic cache_control support.
 //
@@ -55,7 +55,7 @@ type CacheControl struct {
 // SetCacheControl installs (or, when cc.Type == "", clears) a
 // top-level cache_control directive on req. It writes via the SDK's
 // param.metadata.SetExtraFields, so the canonical struct stays
-// dependency-free of anthropify-private state and any other extra
+// dependency-free of turnmeld-private state and any other extra
 // fields the caller has installed are preserved.
 //
 // Calling SetCacheControl is idempotent and safe to call repeatedly.

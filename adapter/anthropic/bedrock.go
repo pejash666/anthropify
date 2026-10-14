@@ -1,5 +1,5 @@
 // Bedrock branch of the Anthropic adapter. This file is the only place
-// in anthropify that imports aws-sdk-go-v2 and the SDK's bedrock
+// in turnmeld that imports aws-sdk-go-v2 and the SDK's bedrock
 // subpackage. It is compiled unconditionally; the runtime decision is
 // made by Adapter.cfg.Mode == AnthropicModeBedrock.
 //
@@ -13,7 +13,7 @@
 //   - Body injection of "anthropic_version": "bedrock-2023-05-31" when
 //     missing (bedrock.go:230-232).
 //   - "anthropic-beta" header to body field translation
-//     (bedrock.go:235-241). Anthropify's ExtraHeaders["anthropic-beta"]
+//     (bedrock.go:235-241). Turnmeld's ExtraHeaders["anthropic-beta"]
 //     therefore round-trips through this middleware automatically; we
 //     do NOT port the llm-proxy betaMiddleware.
 //   - Decoding of application/vnd.amazon.eventstream binary frames
@@ -23,7 +23,7 @@
 //
 // Architectural reference: codeck-backend/llm-proxy
 // clients/anthropic/aws/bedrock_wrapper.go (74 lines, same shape).
-// Anthropify's branch is shorter because the SDK release we pin
+// Turnmeld's branch is shorter because the SDK release we pin
 // (v1.36.0) has the betaMiddleware functionality built in.
 package anthropic
 
@@ -39,7 +39,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 
-	"github.com/pejash666/anthropify/adapter"
+	"github.com/pejash666/turnmeld/adapter"
 )
 
 // newBedrock validates Bedrock-mode credentials and constructs an
@@ -48,13 +48,13 @@ import (
 // SDK's beta-header-to-body middleware sees them.
 func newBedrock(name string, cfg Config) (*Adapter, error) {
 	if cfg.AWSAccessKeyID == "" {
-		return nil, errors.New("anthropify/anthropic: AWSAccessKeyID is required for Bedrock mode")
+		return nil, errors.New("turnmeld/anthropic: AWSAccessKeyID is required for Bedrock mode")
 	}
 	if cfg.AWSSecretAccessKey == "" {
-		return nil, errors.New("anthropify/anthropic: AWSSecretAccessKey is required for Bedrock mode")
+		return nil, errors.New("turnmeld/anthropic: AWSSecretAccessKey is required for Bedrock mode")
 	}
 	if cfg.AWSRegion == "" {
-		return nil, errors.New("anthropify/anthropic: AWSRegion is required for Bedrock mode")
+		return nil, errors.New("turnmeld/anthropic: AWSRegion is required for Bedrock mode")
 	}
 
 	awsCfg := aws.Config{
@@ -94,7 +94,7 @@ func newBedrock(name string, cfg Config) (*Adapter, error) {
 func (a *Adapter) invokeBedrock(ctx context.Context, req anthropicsdk.MessageNewParams) (*anthropicsdk.Message, error) {
 	msg, err := a.bedrockClient.Messages.New(ctx, req)
 	if err != nil {
-		return nil, fmt.Errorf("anthropify/anthropic[bedrock]: %w", err)
+		return nil, fmt.Errorf("turnmeld/anthropic[bedrock]: %w", err)
 	}
 	return msg, nil
 }
@@ -124,7 +124,7 @@ func (a *Adapter) streamBedrock(ctx context.Context, req anthropicsdk.MessageNew
 			ch <- adapter.RawEvent{Data: []byte(raw)}
 		}
 		if err := stream.Err(); err != nil && !errors.Is(err, io.EOF) {
-			ch <- adapter.RawEvent{Err: fmt.Errorf("anthropify/anthropic[bedrock]: %w", err)}
+			ch <- adapter.RawEvent{Err: fmt.Errorf("turnmeld/anthropic[bedrock]: %w", err)}
 		}
 	}()
 	return ch, nil

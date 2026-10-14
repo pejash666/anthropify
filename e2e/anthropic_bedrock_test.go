@@ -8,8 +8,8 @@ import (
 	"testing"
 
 	"github.com/anthropics/anthropic-sdk-go"
-	anthropify "github.com/pejash666/anthropify"
-	"github.com/pejash666/anthropify/e2e/helpers"
+	turnmeld "github.com/pejash666/turnmeld"
+	"github.com/pejash666/turnmeld/e2e/helpers"
 )
 
 // TestE2E_Bedrock_BasicStream is the smoke test for the AWS Bedrock
@@ -93,13 +93,13 @@ func TestE2E_Bedrock_StopReasonMapping(t *testing.T) {
 
 // TestE2E_Bedrock_CacheControl_TopLevel_Rejected documents actual
 // observed behavior for the top-level (automatic-caching) form of
-// cache_control on Bedrock: it is forwarded verbatim by anthropify,
+// cache_control on Bedrock: it is forwarded verbatim by turnmeld,
 // but Bedrock's schema hard-rejects it.
 //
 // Live verification against us-east-1 /
 // us.anthropic.claude-haiku-4-5-20251001-v1:0 (both via raw `aws
 // bedrock-runtime invoke-model` and through this client) shows the
-// top-level cache_control field anthropify.SetCacheControl installs
+// top-level cache_control field turnmeld.SetCacheControl installs
 // (a bare {"cache_control":{"type":"ephemeral"}} at the request root,
 // mirroring native Anthropic's automatic-caching mode) is REJECTED by
 // Bedrock with a hard 400:
@@ -108,7 +108,7 @@ func TestE2E_Bedrock_StopReasonMapping(t *testing.T) {
 //
 // This is not a soft "unsupported, ignored" no-op like Azure/OpenAI --
 // it is a schema-validation error that breaks the entire request. This
-// is a Bedrock-side platform limitation, not an anthropify bug: the
+// is a Bedrock-side platform limitation, not an turnmeld bug: the
 // per-block form (see TestE2E_Bedrock_CacheControl_PerBlock_CacheHit
 // below) is the supported path for prompt caching on Bedrock.
 //
@@ -127,8 +127,8 @@ func TestE2E_Bedrock_CacheControl_TopLevel_Rejected(t *testing.T) {
 				"Reply with just the word OK.")),
 		},
 	}
-	anthropify.SetCacheControl(&req, anthropify.CacheControl{
-		Type: anthropify.CacheControlEphemeral,
+	turnmeld.SetCacheControl(&req, turnmeld.CacheControl{
+		Type: turnmeld.CacheControlEphemeral,
 	})
 
 	_, err := cli.CreateMessage(ctx, req)
@@ -137,7 +137,7 @@ func TestE2E_Bedrock_CacheControl_TopLevel_Rejected(t *testing.T) {
 			"400 ValidationException (observed live behavior as of this test's " +
 			"writing); got nil error instead -- either Bedrock started accepting " +
 			"the field (update README.md's cache_control matrix + this test) or " +
-			"anthropify started stripping it for the bedrock branch (also update " +
+			"turnmeld started stripping it for the bedrock branch (also update " +
 			"this test to assert success)")
 	}
 	if !strings.Contains(err.Error(), "cache_control") &&
@@ -179,7 +179,7 @@ func buildRomanEmpireSystemText(repeat int) string {
 
 // TestE2E_Bedrock_CacheControl_PerBlock_BelowThreshold exercises the
 // per-block cache_control form (set directly on a content block via
-// the SDK's SetExtraFields, independent of anthropify.SetCacheControl
+// the SDK's SetExtraFields, independent of turnmeld.SetCacheControl
 // / the v0.2.0 top-level helper) with a system prompt of ~3500 tokens
 // -- BELOW the per-model minimum cacheable-block size (Claude Haiku
 // 4.5 requires >=4096 tokens per cache checkpoint on Bedrock). Unlike
@@ -255,10 +255,10 @@ func TestE2E_Bedrock_CacheControl_PerBlock_BelowThreshold(t *testing.T) {
 //     cache read hitting the checkpoint written by round 1).
 //
 // This was cross-validated during the investigation both via a raw
-// `aws bedrock-runtime invoke-model` call and through this anthropify
+// `aws bedrock-runtime invoke-model` call and through this turnmeld
 // Bedrock adapter against the same model/region, with both paths
 // showing cache_read landing at ~= the cached prompt's token count on
-// the second round -- i.e. anthropify's Bedrock wire path forwards
+// the second round -- i.e. turnmeld's Bedrock wire path forwards
 // per-block cache_control correctly and Bedrock/the model honour it.
 func TestE2E_Bedrock_CacheControl_PerBlock_CacheHit(t *testing.T) {
 	cli, model := newBedrockClient(t)

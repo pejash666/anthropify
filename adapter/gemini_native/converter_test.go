@@ -107,13 +107,13 @@ func TestConverter_ThinkingThenText(t *testing.T) {
 	got := eventTypes(events)
 	want := []string{
 		"message_start",
-		"content_block_start",   // thinking
-		"content_block_delta",   // thinking_delta
-		"content_block_delta",   // signature_delta (carried by the next text part)
-		"content_block_stop",    // close thinking
-		"content_block_start",   // text
-		"content_block_delta",   // text_delta
-		"content_block_stop",    // close text
+		"content_block_start", // thinking
+		"content_block_delta", // thinking_delta
+		"content_block_delta", // signature_delta (carried by the next text part)
+		"content_block_stop",  // close thinking
+		"content_block_start", // text
+		"content_block_delta", // text_delta
+		"content_block_stop",  // close text
 		"message_delta",
 		"message_stop",
 	}
@@ -267,7 +267,7 @@ func TestConverter_Refusal(t *testing.T) {
 // protocol-correct location per Anthropic's streaming spec) and that
 // promptTokenCount has cached subtracted out. message_stop is also
 // allowed to carry the same usage block for backwards compatibility,
-// but the canonical reader (and the anthropify e2e harness) only
+// but the canonical reader (and the turnmeld e2e harness) only
 // looks at message_start / message_delta.
 func TestConverter_UsageMapping(t *testing.T) {
 	input := `
@@ -603,7 +603,7 @@ func TestSanitizeSchema_DropsUnknownAndInfersType(t *testing.T) {
 	in := map[string]any{
 		"type":                 "OBJECT", // uppercase -> lowercased
 		"description":          "A thing",
-		"additionalProperties": false,    // not in whitelist -> dropped
+		"additionalProperties": false, // not in whitelist -> dropped
 		"properties": map[string]any{
 			"mode": map[string]any{
 				"enum": []any{"a", "b", "c"},

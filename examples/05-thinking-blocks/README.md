@@ -29,7 +29,7 @@ go run ./examples/05-thinking-blocks
 
 Required env: `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `KIMI_API_KEY`.
 
-> Anthropify recommends `gemini-3.5-flash` (GA, supports thinking on
+> Turnmeld recommends `gemini-3.5-flash` (GA, supports thinking on
 > AI Studio billing-enabled projects). Any Gemini 3.x flash variant
 > works. Pro-series models (`gemini-3-pro-preview`,
 > `gemini-3.1-pro-preview`) require explicit Google preview enrolment.

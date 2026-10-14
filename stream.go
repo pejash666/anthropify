@@ -1,9 +1,9 @@
-package anthropify
+package turnmeld
 
 import (
 	"encoding/json"
 
-	"github.com/pejash666/anthropify/adapter"
+	"github.com/pejash666/turnmeld/adapter"
 )
 
 // StreamReader is a pull-style iterator over Anthropic-shaped streaming

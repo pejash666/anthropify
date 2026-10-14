@@ -8,7 +8,7 @@ import (
 
 	anthropicsdk "github.com/anthropics/anthropic-sdk-go"
 
-	"github.com/pejash666/anthropify/internal/schema"
+	"github.com/pejash666/turnmeld/internal/schema"
 )
 
 // BuildRequest converts an Anthropic MessageNewParams payload into a
@@ -33,12 +33,12 @@ import (
 func BuildRequest(ctx context.Context, req anthropicsdk.MessageNewParams) ([]byte, error) {
 	raw, err := json.Marshal(req)
 	if err != nil {
-		return nil, fmt.Errorf("anthropify/gemini_native: marshal request: %w", err)
+		return nil, fmt.Errorf("turnmeld/gemini_native: marshal request: %w", err)
 	}
 
 	var anth map[string]any
 	if err := json.Unmarshal(raw, &anth); err != nil {
-		return nil, fmt.Errorf("anthropify/gemini_native: unmarshal request: %w", err)
+		return nil, fmt.Errorf("turnmeld/gemini_native: unmarshal request: %w", err)
 	}
 
 	out := map[string]any{}

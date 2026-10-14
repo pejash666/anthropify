@@ -2,20 +2,20 @@
 
 The v0.2.0 thesis demo: **protocol is not vendor**. The Anthropic
 Messages API is a wire spec; any provider that speaks it can plug into
-anthropify as a named backend on the *same* in-process adapter.
+turnmeld as a named backend on the *same* in-process adapter.
 
 This example registers Anthropic Inc. (real Claude) and MiniMax
 side-by-side and dispatches by model prefix:
 
 ```go
-client, _ := ap.New(
-    ap.WithAnthropic(ap.AnthropicConfig{APIKey: anthropicKey}),
-    ap.WithAnthropicCompat("minimax", ap.AnthropicConfig{
+client, _ := tm.New(
+    tm.WithAnthropic(tm.AnthropicConfig{APIKey: anthropicKey}),
+    tm.WithAnthropicCompat("minimax", tm.AnthropicConfig{
         BaseURL: "https://api.minimax.io/anthropic",
         APIKey:  os.Getenv("MINIMAX_API_KEY"),
     }),
-    ap.WithModelRoute("MiniMax-",
-        ap.Route{Provider: ap.ProviderAnthropic, Backend: "minimax"}),
+    tm.WithModelRoute("MiniMax-",
+        tm.Route{Provider: tm.ProviderAnthropic, Backend: "minimax"}),
 )
 ```
 

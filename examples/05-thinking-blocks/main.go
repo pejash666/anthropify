@@ -6,7 +6,7 @@ import (
 	"os"
 
 	"github.com/anthropics/anthropic-sdk-go"
-	ap "github.com/pejash666/anthropify"
+	tm "github.com/pejash666/turnmeld"
 )
 
 // thinker pairs a label with a model that supports thinking blocks.
@@ -16,17 +16,17 @@ type thinker struct {
 }
 
 func main() {
-	client, err := ap.New(
-		ap.WithAnthropic(ap.AnthropicConfig{APIKey: os.Getenv("ANTHROPIC_API_KEY")}),
-		ap.WithGemini(ap.GeminiConfig{
-			Mode:   ap.GeminiModeStudio,
+	client, err := tm.New(
+		tm.WithAnthropic(tm.AnthropicConfig{APIKey: os.Getenv("ANTHROPIC_API_KEY")}),
+		tm.WithGemini(tm.GeminiConfig{
+			Mode:   tm.GeminiModeStudio,
 			APIKey: os.Getenv("GEMINI_API_KEY"),
 		}),
-		ap.WithChatCompletion("kimi", ap.OpenAICompatConfig{
+		tm.WithChatCompletion("kimi", tm.OpenAICompatConfig{
 			BaseURL: envOr("KIMI_BASE_URL", "https://api.moonshot.ai/v1"),
 			APIKey:  os.Getenv("KIMI_API_KEY"),
 		}),
-		ap.WithModelRoute("kimi-", ap.Route{Provider: ap.ProviderChatCompletions, Backend: "kimi"}),
+		tm.WithModelRoute("kimi-", tm.Route{Provider: tm.ProviderChatCompletions, Backend: "kimi"}),
 	)
 	if err != nil {
 		panic(err)
@@ -45,7 +45,7 @@ func main() {
 	}
 }
 
-func runOne(client *ap.Client, model, question string) {
+func runOne(client *tm.Client, model, question string) {
 	req := anthropic.MessageNewParams{
 		Model:     anthropic.Model(model),
 		MaxTokens: 16384,
