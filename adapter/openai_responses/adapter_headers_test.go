@@ -12,19 +12,19 @@ import (
 
 	anthropicsdk "github.com/anthropics/anthropic-sdk-go"
 
-	"github.com/pejash666/anthropify/adapter"
+	"github.com/pejash666/turnmeld/adapter"
 )
 
 // captured holds what the fake upstream observed on a single request.
 // All fields are written before Close() returns the channel, so reads
 // after the Stream goroutine drains are race-free.
 type captured struct {
-	mu      sync.Mutex
-	method  string
-	path    string
+	mu       sync.Mutex
+	method   string
+	path     string
 	rawQuery string
-	headers http.Header
-	body    []byte
+	headers  http.Header
+	body     []byte
 }
 
 func newRecordingServer(t *testing.T, c *captured) *httptest.Server {

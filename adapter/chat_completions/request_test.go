@@ -420,7 +420,7 @@ func TestBuildRequest_DeepSeekV32CanonicalPassthrough(t *testing.T) {
 }
 
 // TestBuildRequest_DeepSeekV32AliasPassthrough verifies that the
-// anthropify-extended aliases ("deepseek-v3.2" and "deepseek-v3-2")
+// turnmeld-extended aliases ("deepseek-v3.2" and "deepseek-v3-2")
 // also trigger the passthrough branch. This keeps the legacy callers
 // working alongside the SoT canonical name.
 func TestBuildRequest_DeepSeekV32AliasPassthrough(t *testing.T) {
@@ -545,7 +545,7 @@ func TestBuildRequest_ToolResultMultipleRounds(t *testing.T) {
 }
 
 // TestBuildRequest_TopLevelCacheControl_DroppedAsNoOp documents and
-// asserts the v0.2.0 Track C contract: when the canonical anthropify
+// asserts the v0.2.0 Track C contract: when the canonical turnmeld
 // layer installs a top-level cache_control directive (via
 // SetCacheControl), the chat_completions adapter must NOT forward it
 // to the OpenAI-shaped /v1/chat/completions wire body. Kimi, GLM,
@@ -557,8 +557,8 @@ func TestBuildRequest_TopLevelCacheControl_DroppedAsNoOp(t *testing.T) {
 	if err := json.Unmarshal(rawIn, &params); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	// Mirror anthropify.SetCacheControl behaviour from the canonical
-	// layer (the adapter package can't import anthropify).
+	// Mirror turnmeld.SetCacheControl behaviour from the canonical
+	// layer (the adapter package can't import turnmeld).
 	params.SetExtraFields(map[string]any{
 		"cache_control": map[string]any{"type": "ephemeral"},
 	})

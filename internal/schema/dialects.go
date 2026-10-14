@@ -1,6 +1,6 @@
 package schema
 
-// Dialect constants shipped with anthropify. Each adapter imports its
+// Dialect constants shipped with turnmeld. Each adapter imports its
 // matching dialect; downstream users do not normally need to.
 //
 // Cells in the capability matrix (see docs/design/v0.2.0-...md §4.1)

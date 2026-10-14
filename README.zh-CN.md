@@ -1,20 +1,24 @@
 > 中文版 | [English](./README.md)
 
-<p align="center"><img src="./assets/banner.png" alt="Anthropify" width="640"></p>
+<p align="center"><img src="./assets/banner.png" alt="Turnmeld" width="640"></p>
 
-<h1 align="center">Anthropify：Go 多模型 LLM 协议适配库</h1>
+<h1 align="center">Turnmeld：Go 多模型 LLM 协议适配库</h1>
+
+Turnmeld 原名 Anthropify。从 v0.3.0 起，安装路径为
+`github.com/pejash666/turnmeld`。已有用户请查看
+[迁移指南](./docs/guides/migrate-to-turnmeld.md)。
 
 <p align="center"><i>用 Anthropic Messages API 调用 OpenAI、Gemini、Kimi、DeepSeek 等模型，无需代理服务。</i></p>
 
 <p align="center">
-<a href="https://pkg.go.dev/github.com/pejash666/anthropify"><img src="https://pkg.go.dev/badge/github.com/pejash666/anthropify.svg" alt="Go Reference"></a>
+<a href="https://pkg.go.dev/github.com/pejash666/turnmeld"><img src="https://pkg.go.dev/badge/github.com/pejash666/turnmeld.svg" alt="Go Reference"></a>
 <a href="https://go.dev/"><img src="https://img.shields.io/badge/go-1.24%2B-00ADD8" alt="Go version"></a>
 <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License"></a>
 </p>
 
 ## 这是什么？
 
-Anthropify 是一个开源 Go 库，使用官方
+Turnmeld 是一个开源 Go 库，使用官方
 [`anthropic-sdk-go`](https://github.com/anthropics/anthropic-sdk-go)
 的请求与响应类型，调用 Anthropic、OpenAI、Gemini、Kimi、GLM、MiniMax、
 DeepSeek、AWS Bedrock 和 Azure OpenAI。它在进程内完成协议转换，将 SSE
@@ -24,7 +28,7 @@ DeepSeek、AWS Bedrock 和 Azure OpenAI。它在进程内完成协议转换，�
 应用可以维护同一份 `[]anthropic.MessageParam` 对话历史，通过 `req.Model`
 选择已配置的提供商，并始终消费 `anthropic.MessageStreamEventUnion` 流式事件。
 
-[API 文档](https://pkg.go.dev/github.com/pejash666/anthropify) |
+[API 文档](https://pkg.go.dev/github.com/pejash666/turnmeld) |
 [可运行示例](./examples) |
 [OpenAI 与 Gemini 接入指南（英文）](./docs/guides/anthropic-api-with-openai-gemini.md)
 
@@ -55,17 +59,17 @@ import (
     "os"
 
     "github.com/anthropics/anthropic-sdk-go"
-    ap "github.com/pejash666/anthropify"
+    tm "github.com/pejash666/turnmeld"
 )
 
 func main() {
-    client, err := ap.New(
-        ap.WithChatCompletion("kimi", ap.OpenAICompatConfig{
+    client, err := tm.New(
+        tm.WithChatCompletion("kimi", tm.OpenAICompatConfig{
             BaseURL: "https://api.moonshot.cn/v1",
             APIKey:  os.Getenv("KIMI_API_KEY"),
         }),
-        ap.WithModelRoute("kimi-", ap.Route{
-            Provider: ap.ProviderChatCompletions,
+        tm.WithModelRoute("kimi-", tm.Route{
+            Provider: tm.ProviderChatCompletions,
             Backend:  "kimi",
         }),
     )
@@ -102,7 +106,7 @@ msg, err := client.CreateMessage(ctx, req)
 
 ## 实战演示
 
-Anthropify 在应用侧保留 Anthropic 规范形态的对话，由适配器转换为各家上游协议。
+Turnmeld 在应用侧保留 Anthropic 规范形态的对话，由适配器转换为各家上游协议。
 [example 03](./examples/03-model-hot-switching) 用四轮文本对话切换三家提供商：
 Claude 规划、Kimi 写代码、GLM 翻译、Claude 收尾。全程复用消息历史，每轮选择
 `req.Model` 和对应的 token 预算。
@@ -138,7 +142,7 @@ for _, t := range turns {
   带来记账负担，但并没有让线上形态更易消费。
 
 对一个需要稳定内部事件词汇的 agent 框架来说，Anthropic 的形态在粒度曲线上落在
-一个合用的点。Anthropify 把它作为规范形态，并把所有 provider 都归一化到它。
+一个合用的点。Turnmeld 把它作为规范形态，并把所有 provider 都归一化到它。
 
 ## 支持的 Provider
 
@@ -181,7 +185,7 @@ for _, t := range turns {
 > resource key、Entra/AAD token、APIM 网关都通用）。注册用
 > `WithAzureOpenAI`，详见下方 [Azure OpenAI 集成](#azure-openai-集成) 章节。
 
-> Anthropify 推荐使用 `gemini-3.5-flash`（或任意 Gemini 3.x flash 系列）。
+> Turnmeld 推荐使用 `gemini-3.5-flash`（或任意 Gemini 3.x flash 系列）。
 > Adapter 在 `generationConfig.thinkingConfig` 中发送 `thinkingLevel`，
 > 2.5 系列会以 HTTP 400 拒绝，因此请使用 3.x 系列。Pro 系列模型
 > （`gemini-3-pro-preview`、`gemini-3.1-pro-preview`）需要 Google
@@ -214,12 +218,12 @@ anthropic adapter 上，通过
 `WithAnthropicCompat(name, AnthropicConfig{...})` 注册，再用前缀路由：
 
 ```go
-ap.WithAnthropicCompat("minimax", ap.AnthropicConfig{
+tm.WithAnthropicCompat("minimax", tm.AnthropicConfig{
     BaseURL: "https://api.minimax.io/anthropic",
     APIKey:  os.Getenv("MINIMAX_API_KEY"),
 })
-ap.WithModelRoute("MiniMax-", ap.Route{
-    Provider: ap.ProviderAnthropic, Backend: "minimax",
+tm.WithModelRoute("MiniMax-", tm.Route{
+    Provider: tm.ProviderAnthropic, Backend: "minimax",
 })
 ```
 
@@ -228,7 +232,7 @@ ap.WithModelRoute("MiniMax-", ap.Route{
 
 ## AWS Bedrock 集成
 
-AWS Bedrock 是 Anthropic 协议家族的第三个 backend。anthropify 把所有
+AWS Bedrock 是 Anthropic 协议家族的第三个 backend。turnmeld 把所有
 Bedrock 专属的脏活（SigV4 请求签名、
 `/model/{id}/invoke[-with-response-stream]` URL 改写、
 `anthropic_version: bedrock-2023-05-31` body 注入、
@@ -248,18 +252,18 @@ inference-profile ARN
 在分发时改写。
 
 ```go
-client, err := ap.New(
-    ap.WithAnthropic(ap.AnthropicConfig{
+client, err := tm.New(
+    tm.WithAnthropic(tm.AnthropicConfig{
         APIKey: os.Getenv("ANTHROPIC_API_KEY"),
     }),
-    ap.WithAnthropicBedrock("bedrock", ap.BedrockConfig{
+    tm.WithAnthropicBedrock("bedrock", tm.BedrockConfig{
         AccessKeyID:     os.Getenv("AWS_ACCESS_KEY_ID"),
         SecretAccessKey: os.Getenv("AWS_SECRET_ACCESS_KEY"),
         // SessionToken 可选；只有 STS / SSO 临时密钥才需要
         Region: "us-east-1",
     }),
-    ap.WithModelRoute("claude-opus-4-5", ap.Route{
-        Provider:      ap.ProviderAnthropic,
+    tm.WithModelRoute("claude-opus-4-5", tm.Route{
+        Provider:      tm.ProviderAnthropic,
         Backend:       "bedrock",
         UpstreamModel: "anthropic.claude-opus-4-5-20250929-v1:0",
     }),
@@ -289,32 +293,32 @@ msg, err := client.CreateMessage(ctx, req) // 通过路由表分发到 Bedrock
   SDK 的 bedrock middleware 会把每个值提到请求 body 的
   `anthropic_beta` 数组里——因为 Bedrock 不接 HTTP 头。
 - **Bedrock 上的 `cache_control`。** per-block 和 v0.2.0 顶层两种
-  写法都原样转发。Bedrock 目前对顶层形态的支持还在早期；anthropify
+  写法都原样转发。Bedrock 目前对顶层形态的支持还在早期；turnmeld
   故意不剥这个字段，所以等上游加上之后你不需要改一行代码。
 - **`SessionToken` 可选。** 仅当使用 STS 临时密钥或 AWS SSO 时设置；
-  长期 IAM-user key 不需要。设置后 anthropify 会通过 SigV4 把它
+  长期 IAM-user key 不需要。设置后 turnmeld 会通过 SigV4 把它
   作为 `X-Amz-Security-Token` 头送出。
 - **多 AWS 账户。** 给每个账户注册一个
   `WithAnthropicBedrock("aws-prod", …)`，再把不同模型前缀路由到不同
-  名字。anthropify 故意不在协议 shim 里嵌负载均衡器。
+  名字。turnmeld 故意不在协议 shim 里嵌负载均衡器。
 
 完整设计文档见 `docs/design/v0.2.0-aws-bedrock.md`。
 
 ## Azure OpenAI 集成
 
 Azure OpenAI 是 OpenAI Responses 协议家族的第二个 backend。
-anthropify 把 Azure 的请求复用到与 vanilla OpenAI 完全相同的
+turnmeld 把 Azure 的请求复用到与 vanilla OpenAI 完全相同的
 `adapter/openai_responses` 代码路径上——canonical `BuildRequest`
 和 SSE→Anthropic 事件转换器一字未改。只在网络边界做两件事：
 
 - **URL 拼装。** Azure 的 Responses 端点有两种形态：
   `<resource>/openai/responses?api-version=…`（deployment-less）和
   `<resource>/openai/deployments/<deployment>/responses?api-version=…`
-  （deployment-bound）。anthropify 按 `AzureOpenAIConfig.Deployment`
+  （deployment-bound）。turnmeld 按 `AzureOpenAIConfig.Deployment`
   是否填写自动选。
 - **认证头。** Azure 历史上用 `api-key` 头送 resource key；
   Entra/AAD access token 用 `Authorization: Bearer`；APIM 网关
-  可能扒掉其中一个。anthropify 每次请求两个头都发，所以一个
+  可能扒掉其中一个。turnmeld 每次请求两个头都发，所以一个
   `APIKey` 字段不管你填的是 resource key 还是 AAD token 都能跑。
 
 注册时给 Azure backend 起任意名字，再用标准的 `WithModelRoute`
@@ -323,15 +327,15 @@ Azure deployment 一个 `WithAzureOpenAI(...)`，配合显式
 `WithModelRoute` 让调用方继续使用标准的短模型名：
 
 ```go
-client, err := ap.New(
-    ap.WithAzureOpenAI("azure", ap.AzureOpenAIConfig{
+client, err := tm.New(
+    tm.WithAzureOpenAI("azure", tm.AzureOpenAIConfig{
         BaseURL:    "https://my-resource.openai.azure.com",
         APIKey:     os.Getenv("AZURE_OPENAI_API_KEY"),
         APIVersion: "2025-03-01-preview",
         Deployment: "gpt-5-deployment",
     }),
-    ap.WithModelRoute("gpt-5", ap.Route{
-        Provider: ap.ProviderOpenAIResponses,
+    tm.WithModelRoute("gpt-5", tm.Route{
+        Provider: tm.ProviderOpenAIResponses,
         Backend:  "azure",
     }),
 )
@@ -351,7 +355,7 @@ msg, err := client.CreateMessage(ctx, req) // 路由到 "azure" backend
 
 几条注意事项：
 
-- **`APIVersion` 必填。** anthropify 故意不挑默认值，让 api-version
+- **`APIVersion` 必填。** turnmeld 故意不挑默认值，让 api-version
   升级永远在 source control 里可见。填你 Azure 资源 pin 的版本
   （比如 `2025-03-01-preview`）。
 - **Deployment-less 形态。** `Deployment` 留空时，body 的 `model`
@@ -366,13 +370,13 @@ msg, err := client.CreateMessage(ctx, req) // 路由到 "azure" backend
   自动 cache。
 - **多 deployment。** 给每个 deployment 注册一个
   `WithAzureOpenAI("azure-gpt5", …)`，再把不同模型前缀路由到不同
-  名字。anthropify 故意不在 adapter 里嵌路由逻辑。
+  名字。turnmeld 故意不在 adapter 里嵌路由逻辑。
 
 完整设计文档见 `docs/design/v0.2.0-azure-responses.md`。
 
 ## Prompt caching
 
-Anthropify 同时支持 Anthropic 的两种 prompt caching 模式：
+Turnmeld 同时支持 Anthropic 的两种 prompt caching 模式：
 
 - **顶层自动模式**（v0.2.0+）。请求上挂一个总开关，由上游自动选最优
   cache 切点，并随对话推进自动前移。
@@ -384,7 +388,7 @@ Anthropify 同时支持 Anthropic 的两种 prompt caching 模式：
       System:    longSystemPrompt, // 共享的大段 context
       Messages:  conversation,
   }
-  ap.SetCacheControl(&req, ap.CacheControl{Type: ap.CacheControlEphemeral})
+  tm.SetCacheControl(&req, tm.CacheControl{Type: tm.CacheControlEphemeral})
   msg, err := client.CreateMessage(ctx, req)
   ```
 
@@ -408,7 +412,7 @@ backend 上是有据可依的、静默 no-op —— 这些上游服务端本来�
 |-------------------|---------------------------------------------------|
 | Anthropic         | 发出 `{"cache_control":{"type":"ephemeral"}}`     |
 | MiniMax           | 同上（共用 anthropic adapter）                    |
-| AWS Bedrock       | 字段原样透传；Bedrock 后端是否生效随其支持演进 —— anthropify 不会主动剥离 |
+| AWS Bedrock       | 字段原样透传；Bedrock 后端是否生效随其支持演进 —— turnmeld 不会主动剥离 |
 | OpenAI Responses  | no-op（>1024 token 时服务端自动 cache）           |
 | Azure OpenAI      | no-op（>1024 token 时服务端自动 cache）           |
 | Gemini Native     | no-op（Gemini 2.5+ 隐式 cache）                   |
@@ -436,24 +440,24 @@ Studio）。
 
 ```go
 // Studio
-ap.WithGemini(ap.GeminiConfig{
-    Mode:   ap.GeminiModeStudio,
+tm.WithGemini(tm.GeminiConfig{
+    Mode:   tm.GeminiModeStudio,
     APIKey: os.Getenv("GEMINI_API_KEY"),
 })
 ```
 
 ```go
 // Express（用 API key 调 Vertex）
-ap.WithGemini(ap.GeminiConfig{
-    Mode:   ap.GeminiModeExpress,
+tm.WithGemini(tm.GeminiConfig{
+    Mode:   tm.GeminiModeExpress,
     APIKey: os.Getenv("VERTEX_EXPRESS_KEY"), // AQ.*
 })
 ```
 
 ```go
 // Vertex（OAuth2）
-ap.WithGemini(ap.GeminiConfig{
-    Mode:     ap.GeminiModeVertex,
+tm.WithGemini(tm.GeminiConfig{
+    Mode:     tm.GeminiModeVertex,
     Project:  os.Getenv("VERTEX_PROJECT"),
     Location: os.Getenv("VERTEX_LOCATION"),
     APIKey:   bearerToken, // gcloud auth print-access-token
@@ -463,21 +467,21 @@ ap.WithGemini(ap.GeminiConfig{
 ## 安装
 
 ```bash
-go get github.com/pejash666/anthropify
+go get github.com/pejash666/turnmeld@v0.3.0
 ```
 
 需要 Go 1.24 或更高版本。
 
 ## 与其他方案的对比
 
-Anthropify 的边界是有意收窄的：一个把 Anthropic 规范事件和 provider 原生协
+Turnmeld 的边界是有意收窄的：一个把 Anthropic 规范事件和 provider 原生协
 议互相转换的 Go 库。它不是代理服务、不是路由层、不是多租户网关，仓库里没有
 `cmd/`、没有 YAML、没有 daemon。
 
 如果你需要一个开箱即用的托管代理，带鉴权、限流、计费和多租户，LiteLLM 是更完
 整的方案，并以 Python 为主。如果你需要一个 Go 原生、嵌进 agent 里用的库，要
 求一等公民级别的流式、tool use 支持，并且事件形态对齐 Anthropic 规范，那
-Anthropify 就是为此而生。
+Turnmeld 就是为此而生。
 
 ## 状态
 

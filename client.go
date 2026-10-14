@@ -1,4 +1,4 @@
-package anthropify
+package turnmeld
 
 import (
 	"context"
@@ -8,12 +8,12 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 
-	"github.com/pejash666/anthropify/adapter"
-	anthropicadapter "github.com/pejash666/anthropify/adapter/anthropic"
-	chatadapter "github.com/pejash666/anthropify/adapter/chat_completions"
-	geminiadapter "github.com/pejash666/anthropify/adapter/gemini_native"
-	openairesponses "github.com/pejash666/anthropify/adapter/openai_responses"
-	"github.com/pejash666/anthropify/internal/schema"
+	"github.com/pejash666/turnmeld/adapter"
+	anthropicadapter "github.com/pejash666/turnmeld/adapter/anthropic"
+	chatadapter "github.com/pejash666/turnmeld/adapter/chat_completions"
+	geminiadapter "github.com/pejash666/turnmeld/adapter/gemini_native"
+	openairesponses "github.com/pejash666/turnmeld/adapter/openai_responses"
+	"github.com/pejash666/turnmeld/internal/schema"
 )
 
 // Client is the top-level entry point. Construct one with New.
@@ -50,14 +50,14 @@ func New(opts ...Option) (*Client, error) {
 			HTTPClient:   cfg.httpClient,
 		})
 		if err != nil {
-			return nil, fmt.Errorf("anthropify: anthropic[%s] adapter: %w", name, err)
+			return nil, fmt.Errorf("turnmeld: anthropic[%s] adapter: %w", name, err)
 		}
 		cli.anthropics[name] = a
 	}
 
 	for name, bc := range cfg.anthropicBedrock {
 		if _, dup := cli.anthropics[name]; dup {
-			return nil, fmt.Errorf("anthropify: anthropic backend name %q is registered as both a Direct and a Bedrock backend; pick distinct names", name)
+			return nil, fmt.Errorf("turnmeld: anthropic backend name %q is registered as both a Direct and a Bedrock backend; pick distinct names", name)
 		}
 		a, err := anthropicadapter.New(name, anthropicadapter.Config{
 			Mode:               anthropicadapter.AnthropicModeBedrock,
@@ -70,7 +70,7 @@ func New(opts ...Option) (*Client, error) {
 			HTTPClient:         cfg.httpClient,
 		})
 		if err != nil {
-			return nil, fmt.Errorf("anthropify: anthropic[%s] bedrock adapter: %w", name, err)
+			return nil, fmt.Errorf("turnmeld: anthropic[%s] bedrock adapter: %w", name, err)
 		}
 		cli.anthropics[name] = a
 	}
@@ -85,7 +85,7 @@ func New(opts ...Option) (*Client, error) {
 			HTTPClient:   cfg.httpClient,
 		})
 		if err != nil {
-			return nil, fmt.Errorf("anthropify: openai_responses[%s] adapter: %w", name, err)
+			return nil, fmt.Errorf("turnmeld: openai_responses[%s] adapter: %w", name, err)
 		}
 		cli.openais[name] = a
 	}
@@ -96,7 +96,7 @@ func New(opts ...Option) (*Client, error) {
 		// callers don't get a silent overwrite.
 		if _, dup := cli.openais[name]; dup {
 			return nil, fmt.Errorf(
-				"anthropify: backend name %q registered as both OpenAI and Azure OpenAI", name)
+				"turnmeld: backend name %q registered as both OpenAI and Azure OpenAI", name)
 		}
 		a, err := openairesponses.New(name, openairesponses.Config{
 			APIKey:       ac.APIKey,
@@ -108,7 +108,7 @@ func New(opts ...Option) (*Client, error) {
 			Deployment:   ac.Deployment,
 		})
 		if err != nil {
-			return nil, fmt.Errorf("anthropify: azure_openai[%s] adapter: %w", name, err)
+			return nil, fmt.Errorf("turnmeld: azure_openai[%s] adapter: %w", name, err)
 		}
 		cli.openais[name] = a
 	}
@@ -125,7 +125,7 @@ func New(opts ...Option) (*Client, error) {
 			HTTPClient:   cfg.httpClient,
 		})
 		if err != nil {
-			return nil, fmt.Errorf("anthropify: gemini_native adapter: %w", err)
+			return nil, fmt.Errorf("turnmeld: gemini_native adapter: %w", err)
 		}
 		cli.gemini = a
 	}
@@ -139,7 +139,7 @@ func New(opts ...Option) (*Client, error) {
 			HTTPClient:   cfg.httpClient,
 		})
 		if err != nil {
-			return nil, fmt.Errorf("anthropify: chat_completions[%s] adapter: %w", name, err)
+			return nil, fmt.Errorf("turnmeld: chat_completions[%s] adapter: %w", name, err)
 		}
 		cli.chats[name] = a
 	}

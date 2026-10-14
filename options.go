@@ -1,4 +1,4 @@
-package anthropify
+package turnmeld
 
 import (
 	"context"
@@ -8,9 +8,9 @@ import (
 	"net/http"
 	"strings"
 
-	anthropicadapter "github.com/pejash666/anthropify/adapter/anthropic"
-	geminiadapter "github.com/pejash666/anthropify/adapter/gemini_native"
-	"github.com/pejash666/anthropify/internal/schema"
+	anthropicadapter "github.com/pejash666/turnmeld/adapter/anthropic"
+	geminiadapter "github.com/pejash666/turnmeld/adapter/gemini_native"
+	"github.com/pejash666/turnmeld/internal/schema"
 )
 
 // SchemaPolicy is the v0.2.0 client-global tool-schema normalisation
@@ -121,7 +121,7 @@ type AzureOpenAIConfig struct {
 	// access token. Required.
 	APIKey string
 	// APIVersion is the ?api-version=... query value, e.g.
-	// "2025-03-01-preview". Required — anthropify deliberately does
+	// "2025-03-01-preview". Required — turnmeld deliberately does
 	// not pick a default so api-version upgrades stay visible in
 	// source control.
 	APIVersion string
@@ -267,8 +267,8 @@ func WithLogger(l *slog.Logger) Option {
 // Route.Backend value. To address this backend, add a prefix rule via
 // WithModelRoute, e.g.
 //
-//	ap.WithModelRoute("MiniMax-",
-//	    ap.Route{Provider: ap.ProviderAnthropic, Backend: "minimax"})
+//	tm.WithModelRoute("MiniMax-",
+//	    tm.Route{Provider: tm.ProviderAnthropic, Backend: "minimax"})
 //
 // The reserved name "anthropic" is the default-named slot used by the
 // built-in claude-* prefix routes; WithAnthropic is sugar for
@@ -317,18 +317,18 @@ func WithAnthropic(cfg AnthropicConfig) Option {
 // "anthropic.claude-opus-4-5-20250929-v1:0" or an inference-profile
 // ARN), so the typical usage pairs this option with WithModelRoute:
 //
-//	ap.WithAnthropicBedrock("bedrock", ap.BedrockConfig{
+//	tm.WithAnthropicBedrock("bedrock", tm.BedrockConfig{
 //	    AccessKeyID:     os.Getenv("AWS_ACCESS_KEY_ID"),
 //	    SecretAccessKey: os.Getenv("AWS_SECRET_ACCESS_KEY"),
 //	    Region:          "us-east-1",
 //	}),
-//	ap.WithModelRoute("claude-opus-4-5", ap.Route{
-//	    Provider:      ap.ProviderAnthropic,
+//	tm.WithModelRoute("claude-opus-4-5", tm.Route{
+//	    Provider:      tm.ProviderAnthropic,
 //	    Backend:       "bedrock",
 //	    UpstreamModel: "anthropic.claude-opus-4-5-20250929-v1:0",
 //	}),
 //
-// Anthropify intentionally ships no built-in model-ID mapping table —
+// Turnmeld intentionally ships no built-in model-ID mapping table —
 // inference-profile ARNs are account-scoped, so Route.UpstreamModel
 // remains the single authoritative hook.
 //
@@ -356,14 +356,14 @@ func WithAnthropicBedrock(name string, cfg BedrockConfig) Option {
 // deployment names are usually distinct from canonical OpenAI model
 // names:
 //
-//	ap.WithAzureOpenAI("azure", ap.AzureOpenAIConfig{
+//	tm.WithAzureOpenAI("azure", tm.AzureOpenAIConfig{
 //	    BaseURL:    "https://my-resource.openai.azure.com",
 //	    APIKey:     os.Getenv("AZURE_OPENAI_API_KEY"),
 //	    APIVersion: "2025-03-01-preview",
 //	    Deployment: "gpt-5-deployment",
 //	}),
-//	ap.WithModelRoute("gpt-5", ap.Route{
-//	    Provider: ap.ProviderOpenAIResponses,
+//	tm.WithModelRoute("gpt-5", tm.Route{
+//	    Provider: tm.ProviderOpenAIResponses,
 //	    Backend:  "azure",
 //	}),
 //
@@ -458,7 +458,7 @@ func newNopLogger() *slog.Logger {
 // contextKey avoids accidental collisions with caller-owned keys.
 type contextKey struct{ name string }
 
-func (k contextKey) String() string { return "anthropify:" + k.name }
+func (k contextKey) String() string { return "turnmeld:" + k.name }
 
 var ctxKeyLogger = contextKey{name: "logger"}
 

@@ -2,11 +2,11 @@
 
 ![header](./header.png)
 
-The smallest Anthropify program. Streams a one-line answer from Claude.
+The smallest Turnmeld program. Streams a one-line answer from Claude.
 
 ## What it shows
 
-- `anthropify.New(WithAnthropic(...))` builds a client.
+- `turnmeld.New(WithAnthropic(...))` builds a client.
 - `CreateMessageStream` returns a stream of canonical Anthropic events.
 - Iterating with `stream.Next()` and reading `evt.Delta.Text` is enough to render output.
 

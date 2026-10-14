@@ -99,13 +99,13 @@ func TestAdapter_Stream(t *testing.T) {
 
 // TestAdapter_TopLevelCacheControl_PassesThrough is a contract test
 // for v0.2.0 Track C. It guarantees that an ExtraFields["cache_control"]
-// installed at the top of MessageNewParams (as anthropify.SetCacheControl
+// installed at the top of MessageNewParams (as turnmeld.SetCacheControl
 // does) survives buildPayload's marshal-into-map round-trip and lands
 // as a top-level cache_control object on the wire.
 //
 // Regression guard: if the upstream SDK ever stops merging ExtraFields
 // into the request top-level JSON, this test catches it before the
-// canonical anthropify.SetCacheControl helper silently regresses.
+// canonical turnmeld.SetCacheControl helper silently regresses.
 func TestAdapter_TopLevelCacheControl_PassesThrough(t *testing.T) {
 	var captured []byte
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -125,8 +125,8 @@ func TestAdapter_TopLevelCacheControl_PassesThrough(t *testing.T) {
 	if err := json.Unmarshal(src, &req); err != nil {
 		t.Fatal(err)
 	}
-	// Mirror what anthropify.SetCacheControl does at the canonical
-	// layer; the adapter package can't import anthropify (cycle).
+	// Mirror what turnmeld.SetCacheControl does at the canonical
+	// layer; the adapter package can't import turnmeld (cycle).
 	req.SetExtraFields(map[string]any{
 		"cache_control": map[string]any{"type": "ephemeral"},
 	})

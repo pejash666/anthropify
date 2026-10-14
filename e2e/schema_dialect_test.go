@@ -9,8 +9,8 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 
-	"github.com/pejash666/anthropify"
-	"github.com/pejash666/anthropify/e2e/helpers"
+	"github.com/pejash666/turnmeld"
+	"github.com/pejash666/turnmeld/e2e/helpers"
 )
 
 // TestE2E_SchemaDialect_Portable verifies that one Anthropic-shaped
@@ -29,7 +29,7 @@ import (
 func TestE2E_SchemaDialect_Portable(t *testing.T) {
 	type providerCase struct {
 		name  string
-		build func(*testing.T) (*anthropify.Client, string)
+		build func(*testing.T) (*turnmeld.Client, string)
 	}
 	cases := []providerCase{
 		{name: string(ProviderAnthropic), build: newAnthropicClientLossy},
@@ -125,35 +125,35 @@ func nestedWeatherToolPrompt(model string) anthropic.MessageNewParams {
 // and intermixing the policy parameter with the existing helpers would
 // muddle the simple credential-skipping logic.
 
-func newAnthropicClientLossy(t *testing.T) (*anthropify.Client, string) {
+func newAnthropicClientLossy(t *testing.T) (*turnmeld.Client, string) {
 	t.Helper()
 	env := AnthropicEnv()
 	skipIfUnset(t, env, "ANTHROPIC_API_KEY")
-	cli, err := anthropify.New(
-		anthropify.WithAnthropic(anthropify.AnthropicConfig{APIKey: env.APIKey}),
-		anthropify.WithSchemaPolicy(anthropify.SchemaPolicyLossy),
+	cli, err := turnmeld.New(
+		turnmeld.WithAnthropic(turnmeld.AnthropicConfig{APIKey: env.APIKey}),
+		turnmeld.WithSchemaPolicy(turnmeld.SchemaPolicyLossy),
 	)
 	if err != nil {
-		t.Fatalf("anthropify.New: %v", err)
+		t.Fatalf("turnmeld.New: %v", err)
 	}
 	return cli, env.Model
 }
 
-func newOpenAIClientLossy(t *testing.T) (*anthropify.Client, string) {
+func newOpenAIClientLossy(t *testing.T) (*turnmeld.Client, string) {
 	t.Helper()
 	env := OpenAIEnv()
 	skipIfUnset(t, env, "OPENAI_API_KEY")
-	cli, err := anthropify.New(
-		anthropify.WithOpenAI(anthropify.OpenAIConfig{APIKey: env.APIKey}),
-		anthropify.WithSchemaPolicy(anthropify.SchemaPolicyLossy),
+	cli, err := turnmeld.New(
+		turnmeld.WithOpenAI(turnmeld.OpenAIConfig{APIKey: env.APIKey}),
+		turnmeld.WithSchemaPolicy(turnmeld.SchemaPolicyLossy),
 	)
 	if err != nil {
-		t.Fatalf("anthropify.New: %v", err)
+		t.Fatalf("turnmeld.New: %v", err)
 	}
 	return cli, env.Model
 }
 
-func newGeminiClientLossy(t *testing.T) (*anthropify.Client, string) {
+func newGeminiClientLossy(t *testing.T) (*turnmeld.Client, string) {
 	t.Helper()
 	env := GeminiEnv()
 	if !env.Configured {
@@ -163,47 +163,47 @@ func newGeminiClientLossy(t *testing.T) (*anthropify.Client, string) {
 	if err != nil {
 		t.Fatalf("parse GEMINI_MODE: %v", err)
 	}
-	cli, err := anthropify.New(
-		anthropify.WithGemini(anthropify.GeminiConfig{
+	cli, err := turnmeld.New(
+		turnmeld.WithGemini(turnmeld.GeminiConfig{
 			Mode:     mode,
 			APIKey:   env.APIKey,
 			Project:  env.VertexProject,
 			Location: env.VertexLocation,
 		}),
-		anthropify.WithSchemaPolicy(anthropify.SchemaPolicyLossy),
+		turnmeld.WithSchemaPolicy(turnmeld.SchemaPolicyLossy),
 	)
 	if err != nil {
-		t.Fatalf("anthropify.New: %v", err)
+		t.Fatalf("turnmeld.New: %v", err)
 	}
 	return cli, env.Model
 }
 
-func newChatCompletionsClientLossy(t *testing.T, env ProviderEnv, backend, envVarName string) (*anthropify.Client, string) {
+func newChatCompletionsClientLossy(t *testing.T, env ProviderEnv, backend, envVarName string) (*turnmeld.Client, string) {
 	t.Helper()
 	skipIfUnset(t, env, envVarName)
-	cli, err := anthropify.New(
-		anthropify.WithChatCompletion(backend, anthropify.OpenAICompatConfig{
+	cli, err := turnmeld.New(
+		turnmeld.WithChatCompletion(backend, turnmeld.OpenAICompatConfig{
 			BaseURL: env.BaseURL,
 			APIKey:  env.APIKey,
 		}),
-		anthropify.WithModelOverride(func(model string) (anthropify.Route, bool) {
-			return anthropify.Route{
-				Provider: anthropify.ProviderChatCompletions,
+		turnmeld.WithModelOverride(func(model string) (turnmeld.Route, bool) {
+			return turnmeld.Route{
+				Provider: turnmeld.ProviderChatCompletions,
 				Backend:  backend,
 			}, true
 		}),
-		anthropify.WithSchemaPolicy(anthropify.SchemaPolicyLossy),
+		turnmeld.WithSchemaPolicy(turnmeld.SchemaPolicyLossy),
 	)
 	if err != nil {
-		t.Fatalf("anthropify.New: %v", err)
+		t.Fatalf("turnmeld.New: %v", err)
 	}
 	return cli, env.Model
 }
 
-func newKimiClientLossy(t *testing.T) (*anthropify.Client, string) {
+func newKimiClientLossy(t *testing.T) (*turnmeld.Client, string) {
 	return newChatCompletionsClientLossy(t, KimiEnv(), "kimi", "KIMI_API_KEY")
 }
 
-func newGLMClientLossy(t *testing.T) (*anthropify.Client, string) {
+func newGLMClientLossy(t *testing.T) (*turnmeld.Client, string) {
 	return newChatCompletionsClientLossy(t, GLMEnv(), "glm", "GLM_API_KEY")
 }

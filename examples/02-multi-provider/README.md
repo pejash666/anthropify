@@ -8,7 +8,7 @@ changes.
 
 ## What it shows
 
-- A single `anthropify.New(...)` registers five backends across two
+- A single `turnmeld.New(...)` registers five backends across two
   wire protocols:
   - Anthropic (anthropic protocol, default backend)
   - **MiniMax** (anthropic protocol, second backend via

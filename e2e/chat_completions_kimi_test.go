@@ -6,7 +6,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/pejash666/anthropify/e2e/helpers"
+	"github.com/pejash666/turnmeld/e2e/helpers"
 )
 
 // TestE2E_Kimi_BasicStream is the smoke test for chat_completions_kimi.

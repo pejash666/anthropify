@@ -12,8 +12,8 @@ import (
 
 	anthropicsdk "github.com/anthropics/anthropic-sdk-go"
 
-	"github.com/pejash666/anthropify/adapter"
-	"github.com/pejash666/anthropify/internal/ssehelper"
+	"github.com/pejash666/turnmeld/adapter"
+	"github.com/pejash666/turnmeld/internal/ssehelper"
 )
 
 // Config is the subset of OpenAIConfig this adapter consumes.
@@ -59,14 +59,14 @@ type Adapter struct {
 // Adapter.Name as "openai_responses:<name>".
 func New(name string, cfg Config) (*Adapter, error) {
 	if cfg.APIKey == "" {
-		return nil, errors.New("anthropify/openai_responses: APIKey is required")
+		return nil, errors.New("turnmeld/openai_responses: APIKey is required")
 	}
 	if cfg.Azure {
 		if cfg.BaseURL == "" {
-			return nil, errors.New("anthropify/openai_responses: BaseURL is required in Azure mode")
+			return nil, errors.New("turnmeld/openai_responses: BaseURL is required in Azure mode")
 		}
 		if cfg.APIVersion == "" {
-			return nil, errors.New("anthropify/openai_responses: APIVersion is required in Azure mode")
+			return nil, errors.New("turnmeld/openai_responses: APIVersion is required in Azure mode")
 		}
 	} else if cfg.BaseURL == "" {
 		cfg.BaseURL = "https://api.openai.com"
@@ -163,7 +163,7 @@ func (a *Adapter) Stream(ctx context.Context, req anthropicsdk.MessageNewParams)
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
-		return nil, fmt.Errorf("anthropify/openai_responses: upstream status %d: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("turnmeld/openai_responses: upstream status %d: %s", resp.StatusCode, string(body))
 	}
 
 	ch := make(chan adapter.RawEvent, 16)

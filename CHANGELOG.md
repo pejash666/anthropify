@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-14
+
+### Breaking
+
+- **Project and Go module renamed to Turnmeld.** The module path changes
+  from `github.com/pejash666/anthropify` to
+  `github.com/pejash666/turnmeld`, and the root package name changes from
+  `anthropify` to `turnmeld`. Update all imports, including adapter
+  subpackages, and package qualifiers or explicit aliases. See the
+  [migration guide](docs/guides/migrate-to-turnmeld.md).
+- Error messages and context-key diagnostic strings now use the `turnmeld`
+  prefix. Exported option, type and sentinel-error names are unchanged.
+  Old and new module imports must not be mixed: they have distinct Go type
+  and sentinel identities.
+
+### Changed
+
+- Updated English and Chinese READMEs, examples, package documentation,
+  installation commands and current guides for the new name and path.
+- Added the OpenAI/Gemini integration, provider-switching and library vs
+  proxy guides since v0.2.0.
+- Preserved v0.2.0 and v0.2.0-alpha tags and historical design/release
+  documents. Those tags retain their original Anthropify module path;
+  v0.3.0 is the first release installable under the Turnmeld module path.
+
+The rename does not change provider behavior or the canonical request and
+streaming event types from the official Anthropic Go SDK.
+
 ## [0.2.0] - 2026-07-09
 
 General availability release. Promotes 0.2.0-alpha to GA: all eight
@@ -133,6 +161,7 @@ and adds two new transport backends (AWS Bedrock, Azure OpenAI Responses).
 - The single-backend option layout from the pre-0.2 scaffold (superseded by
   named registries; see BREAKING above).
 
-[Unreleased]: https://github.com/pejash666/anthropify/compare/v0.2.0...HEAD
-[0.2.0]: https://github.com/pejash666/anthropify/compare/v0.2.0-alpha...v0.2.0
-[0.2.0-alpha]: https://github.com/pejash666/anthropify/releases/tag/v0.2.0-alpha
+[Unreleased]: https://github.com/pejash666/turnmeld/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/pejash666/turnmeld/compare/v0.2.0...v0.3.0
+[0.2.0]: https://github.com/pejash666/turnmeld/compare/v0.2.0-alpha...v0.2.0
+[0.2.0-alpha]: https://github.com/pejash666/turnmeld/releases/tag/v0.2.0-alpha

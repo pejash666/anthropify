@@ -16,9 +16,9 @@ import (
 
 	anthropicsdk "github.com/anthropics/anthropic-sdk-go"
 
-	"github.com/pejash666/anthropify/adapter"
-	"github.com/pejash666/anthropify/internal/schema"
-	"github.com/pejash666/anthropify/internal/ssehelper"
+	"github.com/pejash666/turnmeld/adapter"
+	"github.com/pejash666/turnmeld/internal/schema"
+	"github.com/pejash666/turnmeld/internal/ssehelper"
 )
 
 // AnthropicMode selects which upstream the adapter dispatches to. The
@@ -87,7 +87,7 @@ func New(name string, cfg Config) (*Adapter, error) {
 		return newBedrock(name, cfg)
 	}
 	if cfg.APIKey == "" {
-		return nil, errors.New("anthropify/anthropic: APIKey is required")
+		return nil, errors.New("turnmeld/anthropic: APIKey is required")
 	}
 	if cfg.BaseURL == "" {
 		cfg.BaseURL = "https://api.anthropic.com"
@@ -129,11 +129,11 @@ func (a *Adapter) Invoke(ctx context.Context, req anthropicsdk.MessageNewParams)
 		return nil, err
 	}
 	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("anthropify/anthropic: upstream status %d: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("turnmeld/anthropic: upstream status %d: %s", resp.StatusCode, string(body))
 	}
 	var msg anthropicsdk.Message
 	if err := json.Unmarshal(body, &msg); err != nil {
-		return nil, fmt.Errorf("anthropify/anthropic: decode response: %w", err)
+		return nil, fmt.Errorf("turnmeld/anthropic: decode response: %w", err)
 	}
 	return &msg, nil
 }
@@ -161,7 +161,7 @@ func (a *Adapter) Stream(ctx context.Context, req anthropicsdk.MessageNewParams)
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
-		return nil, fmt.Errorf("anthropify/anthropic: upstream status %d: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("turnmeld/anthropic: upstream status %d: %s", resp.StatusCode, string(body))
 	}
 
 	ch := make(chan adapter.RawEvent, 16)
@@ -213,7 +213,7 @@ func (a *Adapter) newHTTPRequest(ctx context.Context, payload []byte, stream boo
 func buildPayload(ctx context.Context, req anthropicsdk.MessageNewParams, stream bool) ([]byte, error) {
 	raw, err := json.Marshal(req)
 	if err != nil {
-		return nil, fmt.Errorf("anthropify/anthropic: marshal request: %w", err)
+		return nil, fmt.Errorf("turnmeld/anthropic: marshal request: %w", err)
 	}
 	var m map[string]any
 	if err := json.Unmarshal(raw, &m); err != nil {
@@ -240,7 +240,7 @@ func buildPayload(ctx context.Context, req anthropicsdk.MessageNewParams, stream
 				normalised, _, err := schema.Normalize(ctx, rawSchema, schema.DialectAnthropic, policy)
 				if err != nil {
 					name, _ := tm["name"].(string)
-					return nil, fmt.Errorf("anthropify/anthropic: tool %q: %w", name, err)
+					return nil, fmt.Errorf("turnmeld/anthropic: tool %q: %w", name, err)
 				}
 				tm["input_schema"] = normalised
 			}

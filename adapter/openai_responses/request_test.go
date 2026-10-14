@@ -136,7 +136,7 @@ func startsWith(s, prefix string) bool {
 }
 
 // TestBuildRequest_TopLevelCacheControl_DroppedAsNoOp documents and
-// asserts the v0.2.0 Track C contract: when the canonical anthropify
+// asserts the v0.2.0 Track C contract: when the canonical turnmeld
 // layer installs a top-level cache_control directive (via
 // SetCacheControl), the openai_responses adapter must NOT forward it
 // to the OpenAI Responses /v1/responses wire body. OpenAI prompt
@@ -152,7 +152,7 @@ func TestBuildRequest_TopLevelCacheControl_DroppedAsNoOp(t *testing.T) {
 	if err := json.Unmarshal(src, &req); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	// Mirror anthropify.SetCacheControl from the canonical layer.
+	// Mirror turnmeld.SetCacheControl from the canonical layer.
 	req.SetExtraFields(map[string]any{
 		"cache_control": map[string]any{"type": "ephemeral"},
 	})

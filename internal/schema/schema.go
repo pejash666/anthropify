@@ -1,5 +1,5 @@
 // Package schema centralises tool input_schema dialect handling for
-// every protocol adapter shipped by anthropify.
+// every protocol adapter shipped by turnmeld.
 //
 // Each adapter declares one constant Dialect and calls Normalize. The
 // normalizer drives conversion off the dialect's capability bits, with
@@ -8,7 +8,7 @@
 //
 // The package has zero dependencies outside the standard library so
 // adapter code can import it without dragging in the rest of the
-// anthropify surface.
+// turnmeld surface.
 package schema
 
 import (
@@ -116,25 +116,25 @@ type Warning struct {
 
 // ErrSchemaIncompatible is the sentinel returned when a transform was
 // rejected by the active Policy. Callers detect it with errors.Is.
-var ErrSchemaIncompatible = errors.New("anthropify/schema: incompatible schema")
+var ErrSchemaIncompatible = errors.New("turnmeld/schema: incompatible schema")
 
 // Warning codes. Stable strings so callers can grep logs.
 const (
-	CodeDropOneOf            = "drop_oneof"
-	CodeRewriteOneOf         = "rewrite_oneof_to_anyof"
-	CodeDropAllOf            = "drop_allof"
-	CodeDropNot              = "drop_not"
-	CodeDropMultipleOf       = "drop_multipleof"
-	CodeDropUniqueItems      = "drop_uniqueitems"
-	CodeDropExclusive        = "drop_exclusive_bounds"
-	CodeDropAdditionalProps  = "drop_additional_props"
-	CodeDowngradeAddlProps   = "downgrade_additional_props"
-	CodeRewriteNullableType  = "rewrite_nullable_type"
-	CodeDropForbiddenKey     = "drop_forbidden_key"
-	CodeRefUnsupported       = "ref_unsupported"
-	CodeRecursionLimit       = "recursion_limit"
-	CodeAdditionalPropsTrue  = "additional_props_true"
-	CodeAdditionalPropsSchm  = "additional_props_schema"
+	CodeDropOneOf           = "drop_oneof"
+	CodeRewriteOneOf        = "rewrite_oneof_to_anyof"
+	CodeDropAllOf           = "drop_allof"
+	CodeDropNot             = "drop_not"
+	CodeDropMultipleOf      = "drop_multipleof"
+	CodeDropUniqueItems     = "drop_uniqueitems"
+	CodeDropExclusive       = "drop_exclusive_bounds"
+	CodeDropAdditionalProps = "drop_additional_props"
+	CodeDowngradeAddlProps  = "downgrade_additional_props"
+	CodeRewriteNullableType = "rewrite_nullable_type"
+	CodeDropForbiddenKey    = "drop_forbidden_key"
+	CodeRefUnsupported      = "ref_unsupported"
+	CodeRecursionLimit      = "recursion_limit"
+	CodeAdditionalPropsTrue = "additional_props_true"
+	CodeAdditionalPropsSchm = "additional_props_schema"
 )
 
 // Normalize lowers a canonical Anthropic-shape schema to the dialect.
@@ -664,7 +664,7 @@ func inferTypeFromEnum(enumArr []any) string {
 // contextKey is unexported so adapters cannot accidentally collide.
 type contextKey struct{ name string }
 
-func (k contextKey) String() string { return "anthropify/schema:" + k.name }
+func (k contextKey) String() string { return "turnmeld/schema:" + k.name }
 
 var (
 	ctxKeyPolicy = contextKey{name: "policy"}

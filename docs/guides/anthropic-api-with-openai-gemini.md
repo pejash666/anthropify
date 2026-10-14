@@ -1,6 +1,6 @@
 # Use the Anthropic Messages API with OpenAI and Gemini in Go
 
-Anthropify lets a Go application call OpenAI and Gemini with the request
+Turnmeld lets a Go application call OpenAI and Gemini with the request
 and response types from the official `anthropic-sdk-go`. It translates
 requests inside your process and returns Anthropic-shaped streaming
 events. You do not need an Anthropic API key or a proxy server to call
@@ -8,7 +8,7 @@ these providers.
 
 This is an application-facing compatibility layer, not an HTTP server
 that exposes `/v1/messages`. Existing Go code can keep its Anthropic
-message types, but calls go through `anthropify.Client`.
+message types, but calls go through `turnmeld.Client`.
 
 ## Choose the Correct Upstream Protocol
 
@@ -21,16 +21,16 @@ Responses endpoint. If your provider only exposes `/chat/completions`,
 use `WithChatCompletion` instead. OpenAI documents these as separate
 APIs in its [Responses migration guide](https://developers.openai.com/api/docs/guides/migrate-to-responses).
 
-Anthropify normalizes the subset supported by its adapters; it does not
+Turnmeld normalizes the subset supported by its adapters; it does not
 expose every feature of the upstream SDKs, such as OpenAI's built-in
 hosted tools.
 
-## Install Anthropify
+## Install Turnmeld
 
 Use Go 1.24.3 or later. In a Go module:
 
 ```bash
-go get github.com/pejash666/anthropify@v0.2.0
+go get github.com/pejash666/turnmeld@v0.3.0
 ```
 
 The following program uses APIs available in `v0.2.0`. API keys and model
@@ -53,7 +53,7 @@ import (
     "time"
 
     "github.com/anthropics/anthropic-sdk-go"
-    ap "github.com/pejash666/anthropify"
+    tm "github.com/pejash666/turnmeld"
 )
 
 func main() {
@@ -69,7 +69,7 @@ func run() error {
         provider = "openai"
     }
 
-    var opts []ap.Option
+    var opts []tm.Option
     var model string
     switch provider {
     case "openai":
@@ -79,10 +79,10 @@ func run() error {
             return fmt.Errorf("set OPENAI_API_KEY and OPENAI_MODEL")
         }
         model = "openai-demo"
-        opts = []ap.Option{
-            ap.WithOpenAI(ap.OpenAIResponsesConfig{APIKey: key}),
-            ap.WithModelRoute(model, ap.Route{
-                Provider:      ap.ProviderOpenAIResponses,
+        opts = []tm.Option{
+            tm.WithOpenAI(tm.OpenAIResponsesConfig{APIKey: key}),
+            tm.WithModelRoute(model, tm.Route{
+                Provider:      tm.ProviderOpenAIResponses,
                 UpstreamModel: upstream,
             }),
         }
@@ -93,13 +93,13 @@ func run() error {
             return fmt.Errorf("set GEMINI_API_KEY and GEMINI_MODEL")
         }
         model = "gemini-demo"
-        opts = []ap.Option{
-            ap.WithGemini(ap.GeminiConfig{
-                Mode:   ap.GeminiModeStudio,
+        opts = []tm.Option{
+            tm.WithGemini(tm.GeminiConfig{
+                Mode:   tm.GeminiModeStudio,
                 APIKey: key,
             }),
-            ap.WithModelRoute(model, ap.Route{
-                Provider:      ap.ProviderGeminiNative,
+            tm.WithModelRoute(model, tm.Route{
+                Provider:      tm.ProviderGeminiNative,
                 UpstreamModel: upstream,
             }),
         }
@@ -107,7 +107,7 @@ func run() error {
         return fmt.Errorf("LLM_PROVIDER must be openai or gemini")
     }
 
-    client, err := ap.New(opts...)
+    client, err := tm.New(opts...)
     if err != nil {
         return err
     }
@@ -167,7 +167,7 @@ application choice, not a provider limit.
 your environment before sending the request upstream.
 
 This avoids assuming that every OpenAI model name matches a built-in
-prefix. Without explicit routes, Anthropify routes `gpt-`, `o1-` and
+prefix. Without explicit routes, Turnmeld routes `gpt-`, `o1-` and
 `o3-` to OpenAI Responses and `gemini-` to Gemini Native. Provider
 registration alone does not add routes for arbitrary model names.
 
@@ -226,7 +226,7 @@ assembles an `*anthropic.Message`.
 
 Your application owns the conversation history. To continue a text
 conversation, append the assistant's text as an
-`anthropic.MessageParam`, then append the next user message. Anthropify
+`anthropic.MessageParam`, then append the next user message. Turnmeld
 does not expose an upstream conversation ID as a shared cross-provider
 session. See [switching providers mid-conversation](./switch-llm-providers-in-go.md).
 
@@ -265,4 +265,4 @@ be verified in your deployment.
 - [Public provider options](../../options.go)
 - [OpenAI Responses adapter](../../adapter/openai_responses/adapter.go)
 - [Gemini Native adapter](../../adapter/gemini_native/adapter.go)
-- [API reference](https://pkg.go.dev/github.com/pejash666/anthropify)
+- [API reference](https://pkg.go.dev/github.com/pejash666/turnmeld)

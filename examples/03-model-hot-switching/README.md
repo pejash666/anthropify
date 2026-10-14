@@ -2,7 +2,7 @@
 
 ![header](./header.png)
 
-> **The whole reason Anthropify exists.**
+> **The whole reason Turnmeld exists.**
 > One text conversation. Four turns. Three providers. Shared history.
 
 ## What it shows

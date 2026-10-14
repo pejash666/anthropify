@@ -7,30 +7,30 @@ import (
 	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
-	ap "github.com/pejash666/anthropify"
+	tm "github.com/pejash666/turnmeld"
 )
 
-// Demonstrates that one anthropify.Client can dispatch to five
+// Demonstrates that one turnmeld.Client can dispatch to five
 // different providers — across two protocols — based purely on the
 // req.Model prefix. Anthropic and MiniMax share the *anthropic*
 // protocol but ride two distinct backends; the application code is
 // identical across providers.
 func main() {
-	client, err := ap.New(
-		ap.WithAnthropic(ap.AnthropicConfig{APIKey: os.Getenv("ANTHROPIC_API_KEY")}),
-		ap.WithAnthropicCompat("minimax", ap.AnthropicConfig{
+	client, err := tm.New(
+		tm.WithAnthropic(tm.AnthropicConfig{APIKey: os.Getenv("ANTHROPIC_API_KEY")}),
+		tm.WithAnthropicCompat("minimax", tm.AnthropicConfig{
 			BaseURL: envOr("MINIMAX_BASE_URL", "https://api.minimax.io/anthropic"),
 			APIKey:  os.Getenv("MINIMAX_API_KEY"),
 		}),
-		ap.WithGemini(ap.GeminiConfig{
-			Mode:   ap.GeminiModeStudio,
+		tm.WithGemini(tm.GeminiConfig{
+			Mode:   tm.GeminiModeStudio,
 			APIKey: os.Getenv("GEMINI_API_KEY"),
 		}),
-		ap.WithChatCompletion("kimi", ap.OpenAICompatConfig{
+		tm.WithChatCompletion("kimi", tm.OpenAICompatConfig{
 			BaseURL: envOr("KIMI_BASE_URL", "https://api.moonshot.ai/v1"),
 			APIKey:  os.Getenv("KIMI_API_KEY"),
 		}),
-		ap.WithChatCompletion("glm", ap.OpenAICompatConfig{
+		tm.WithChatCompletion("glm", tm.OpenAICompatConfig{
 			BaseURL: envOr("GLM_BASE_URL", "https://open.bigmodel.cn/api/paas/v4"),
 			APIKey:  os.Getenv("GLM_API_KEY"),
 		}),
@@ -39,14 +39,14 @@ func main() {
 		// names. MiniMax pins the "MiniMax-" prefix to the second
 		// anthropic-protocol backend so the dispatcher does not confuse
 		// it with real Claude.
-		ap.WithModelRoute("kimi-", ap.Route{
-			Provider: ap.ProviderChatCompletions, Backend: "kimi",
+		tm.WithModelRoute("kimi-", tm.Route{
+			Provider: tm.ProviderChatCompletions, Backend: "kimi",
 		}),
-		ap.WithModelRoute("glm-", ap.Route{
-			Provider: ap.ProviderChatCompletions, Backend: "glm",
+		tm.WithModelRoute("glm-", tm.Route{
+			Provider: tm.ProviderChatCompletions, Backend: "glm",
 		}),
-		ap.WithModelRoute("MiniMax-", ap.Route{
-			Provider: ap.ProviderAnthropic, Backend: "minimax",
+		tm.WithModelRoute("MiniMax-", tm.Route{
+			Provider: tm.ProviderAnthropic, Backend: "minimax",
 		}),
 	)
 	if err != nil {
@@ -66,7 +66,7 @@ func main() {
 	}
 }
 
-func askOnce(client *ap.Client, model, question string) {
+func askOnce(client *tm.Client, model, question string) {
 	stream, err := client.CreateMessageStream(context.Background(), anthropic.MessageNewParams{
 		Model:     anthropic.Model(model),
 		MaxTokens: 1024,

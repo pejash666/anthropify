@@ -4,13 +4,13 @@ Use an embedded library when a Go application needs protocol translation
 inside its own process. Use a proxy or gateway when multiple callers need
 a shared HTTP service and centrally enforced access or usage policies.
 
-Anthropify addresses the first problem: it lets Go applications call
+Turnmeld addresses the first problem: it lets Go applications call
 multiple LLM providers with Anthropic Messages API types. It is not a
 replacement for every feature of an LLM gateway.
 
-## What Anthropify Actually Provides
+## What Turnmeld Actually Provides
 
-Anthropify runs as a dependency in your Go application. The caller uses
+Turnmeld runs as a dependency in your Go application. The caller uses
 `anthropic.MessageNewParams`; the selected adapter builds the upstream
 request and normalizes responses into Anthropic-shaped events.
 
@@ -18,7 +18,7 @@ The normal request path is:
 
 ```text
 Go application
-  -> anthropify.Client
+  -> turnmeld.Client
   -> model route and provider adapter
   -> upstream LLM API
 ```
@@ -34,12 +34,12 @@ The library supplies:
 - Tool-schema normalization with explicit strict or lossy policies.
 - Provider-specific handling of thinking and prompt caching.
 
-Anthropify does not ship an HTTP server, daemon, YAML configuration
+Turnmeld does not ship an HTTP server, daemon, YAML configuration
 service, shared user database or centralized billing system.
 
 ## When an Embedded Library Fits
 
-Choose Anthropify when these conditions match your application:
+Choose Turnmeld when these conditions match your application:
 
 - The caller is written in Go.
 - You want Anthropic's message and content-block event shapes as the
@@ -52,7 +52,7 @@ Choose Anthropify when these conditions match your application:
   controls in the surrounding application.
 
 For example, a Go agent service may keep one canonical text history and
-select a configured model per turn. Anthropify handles protocol
+select a configured model per turn. Turnmeld handles protocol
 conversion; the service still decides which user may call that model,
 how much they may spend and how to handle failures.
 
@@ -85,7 +85,7 @@ authentication model and deployment before relying on any of them.
 [LiteLLM](https://docs.litellm.ai/docs/) is one project to evaluate for
 a shared gateway. Compare the supported HTTP protocols and the features
 you need using its own documentation. This guide makes no performance,
-cost or feature-parity claim between LiteLLM and Anthropify.
+cost or feature-parity claim between LiteLLM and Turnmeld.
 
 ## Responsibilities Stay Somewhere
 
@@ -94,7 +94,7 @@ components; neither removes them.
 
 ### Credentials and Access
 
-With Anthropify, your application supplies upstream credentials when
+With Turnmeld, your application supplies upstream credentials when
 constructing the client. It must store them securely and prevent users
 from selecting unauthorized backends or endpoints.
 
@@ -108,7 +108,7 @@ handles prompts, responses and potentially sensitive logs.
 
 ### Conversation State
 
-Anthropify does not own a durable conversation store. Your application
+Turnmeld does not own a durable conversation store. Your application
 keeps messages and decides which parts can be replayed. A common type
 does not make every provider's thinking signatures or tool history
 interchangeable.
@@ -118,7 +118,7 @@ that an HTTP gateway automatically provides durable history.
 
 ### Retries, Quotas and Failover
 
-Anthropify's prefix routes choose configured backends; they are not an
+Turnmeld's prefix routes choose configured backends; they are not an
 automatic failover or load-balancing policy. `WithModelOverride` lets
 the application provide a routing decision, but does not supply a
 complete policy engine.
@@ -131,7 +131,7 @@ these application-level constraints.
 
 ### Observability
 
-Anthropify accepts an application logger through `WithLogger`; it does
+Turnmeld accepts an application logger through `WithLogger`; it does
 not provide a centralized request dashboard or usage ledger. Integrate
 the observability your application requires without leaking API keys
 or prompt content.
@@ -141,7 +141,7 @@ what it records, redacts and retains.
 
 ## A Library and Gateway Can Coexist
 
-The choice is not always exclusive. A Go application can use Anthropify
+The choice is not always exclusive. A Go application can use Turnmeld
 for its canonical message shape and send translated requests to a
 trusted gateway that exposes the expected upstream protocol.
 
@@ -150,7 +150,7 @@ supports `/v1/responses` by configuring its base URL. A gateway that
 only exposes Chat Completions needs the Chat Completions adapter.
 Compatible authentication and streaming behavior must also be tested.
 
-Anthropify does not make an arbitrary gateway Anthropic-compatible,
+Turnmeld does not make an arbitrary gateway Anthropic-compatible,
 and its Go client does not expose `/v1/messages` for external callers.
 See the [endpoint configuration guide](./anthropic-api-with-openai-gemini.md#configure-custom-endpoints).
 
@@ -168,7 +168,7 @@ See the [endpoint configuration guide](./anthropic-api-with-openai-gemini.md#con
 7. Which operational controls must exist before production traffic?
 
 For a Go application that owns those controls and wants Anthropic-shaped
-messages, Anthropify is a focused protocol dependency. For a shared
+messages, Turnmeld is a focused protocol dependency. For a shared
 network interface with centralized policies, evaluate a gateway.
 
 ## Implementation References
@@ -178,4 +178,4 @@ network interface with centralized policies, evaluate a gateway.
 - [Route resolution](../../router.go)
 - [Tool-schema policy](../design/v0.2.0-protocol-driven-adapters.md)
 - [Prompt-caching behavior](../../README.md#prompt-caching)
-- [API reference](https://pkg.go.dev/github.com/pejash666/anthropify)
+- [API reference](https://pkg.go.dev/github.com/pejash666/turnmeld)

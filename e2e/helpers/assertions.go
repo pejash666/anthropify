@@ -11,7 +11,7 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 
-	"github.com/pejash666/anthropify"
+	"github.com/pejash666/turnmeld"
 )
 
 // StreamSummary distills a finished stream into the values every E2E
@@ -27,10 +27,10 @@ type StreamSummary struct {
 	BlockTypes           []string
 }
 
-// DrainStream consumes a *anthropify.StreamReader and returns a
+// DrainStream consumes a *turnmeld.StreamReader and returns a
 // summary plus the first transport error, if any. Tests call this with
 // the StreamReader produced by client.CreateMessageStream.
-func DrainStream(t *testing.T, stream *anthropify.StreamReader) StreamSummary {
+func DrainStream(t *testing.T, stream *turnmeld.StreamReader) StreamSummary {
 	t.Helper()
 	var s StreamSummary
 	var text strings.Builder
@@ -219,7 +219,7 @@ func AssertNonStreamingMessage(t *testing.T, msg *anthropic.Message) {
 
 // RecordingTransport is the placeholder hook for fixture recording. When
 // E2E_RECORD_FIXTURES=true the harness should wrap the
-// anthropify.WithHTTPClient transport to mirror raw SSE bytes into
+// turnmeld.WithHTTPClient transport to mirror raw SSE bytes into
 // testdata/fixtures/recorded/<provider>/<test>.sse.
 //
 // TODO: implement. Today this is a no-op so the type compiles cleanly.
@@ -239,7 +239,7 @@ func (r *RecordingTransport) WrapContext(ctx context.Context) context.Context { 
 // still scaffolded (openai_responses, gemini_native, chat_completions).
 // Known limitation: the top-level client only natively non-streams via
 // the anthropic passthrough adapter today; other providers return
-// anthropify.ErrUnsupported (or an error message containing
+// turnmeld.ErrUnsupported (or an error message containing
 // "feature not yet supported"). Once the fallback drain is wired up
 // these skips can be removed.
 func SkipIfUnsupported(t *testing.T, err error) bool {
@@ -247,7 +247,7 @@ func SkipIfUnsupported(t *testing.T, err error) bool {
 	if err == nil {
 		return false
 	}
-	if errors.Is(err, anthropify.ErrUnsupported) {
+	if errors.Is(err, turnmeld.ErrUnsupported) {
 		t.Skipf("skipping: non-streaming not yet supported by adapter: %v", err)
 		return true
 	}

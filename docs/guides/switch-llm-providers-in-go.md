@@ -1,6 +1,6 @@
 # Switch LLM Providers Mid-Conversation in Go
 
-Anthropify is an open-source Go library that lets an application use the
+Turnmeld is an open-source Go library that lets an application use the
 Anthropic Messages API with Anthropic, OpenAI, Gemini, Kimi, GLM, DeepSeek
 and other configured providers. Protocol translation runs inside the
 application; there is no proxy server to deploy.
@@ -19,7 +19,7 @@ An application that calls multiple LLM APIs normally has to handle different
 request bodies and streaming protocols. Anthropic has content-block events,
 OpenAI Chat Completions uses deltas, and Gemini has its own response shape.
 
-Anthropify uses types from the official
+Turnmeld uses types from the official
 [`anthropic-sdk-go`](https://github.com/anthropics/anthropic-sdk-go) as the
 application-facing format:
 
@@ -34,34 +34,34 @@ provider.
 
 ## Register Providers and Model Routes
 
-Install Anthropify with Go 1.24.3 or later:
+Install Turnmeld with Go 1.24.3 or later:
 
 ```bash
-go get github.com/pejash666/anthropify
+go get github.com/pejash666/turnmeld@v0.3.0
 ```
 
 The example registers Anthropic directly and Kimi and GLM through their
 OpenAI-compatible Chat Completions endpoints:
 
 ```go
-client, err := ap.New(
-    ap.WithAnthropic(ap.AnthropicConfig{
+client, err := tm.New(
+    tm.WithAnthropic(tm.AnthropicConfig{
         APIKey: os.Getenv("ANTHROPIC_API_KEY"),
     }),
-    ap.WithChatCompletion("kimi", ap.OpenAICompatConfig{
+    tm.WithChatCompletion("kimi", tm.OpenAICompatConfig{
         BaseURL: "https://api.moonshot.ai/v1",
         APIKey:  os.Getenv("KIMI_API_KEY"),
     }),
-    ap.WithChatCompletion("glm", ap.OpenAICompatConfig{
+    tm.WithChatCompletion("glm", tm.OpenAICompatConfig{
         BaseURL: "https://open.bigmodel.cn/api/paas/v4",
         APIKey:  os.Getenv("GLM_API_KEY"),
     }),
-    ap.WithModelRoute("kimi-", ap.Route{
-        Provider: ap.ProviderChatCompletions,
+    tm.WithModelRoute("kimi-", tm.Route{
+        Provider: tm.ProviderChatCompletions,
         Backend:  "kimi",
     }),
-    ap.WithModelRoute("glm-", ap.Route{
-        Provider: ap.ProviderChatCompletions,
+    tm.WithModelRoute("glm-", tm.Route{
+        Provider: tm.ProviderChatCompletions,
         Backend:  "glm",
     }),
 )
@@ -70,7 +70,7 @@ if err != nil {
 }
 ```
 
-Here `ap` imports `github.com/pejash666/anthropify`. The default `claude-`
+Here `tm` imports `github.com/pejash666/turnmeld`. The default `claude-`
 route targets Anthropic. The explicit `kimi-` and `glm-` routes select the
 named backends. The runnable example also supports endpoint overrides
 through `KIMI_BASE_URL` and `GLM_BASE_URL`.
@@ -122,7 +122,7 @@ example collects only text deltas:
 
 ```go
 func runTurn(
-    client *ap.Client,
+    client *tm.Client,
     model string,
     maxTokens int64,
     messages []anthropic.MessageParam,
@@ -161,8 +161,8 @@ For applications that need completed responses rather than streaming,
 Clone the repository and run the example from its root:
 
 ```bash
-git clone https://github.com/pejash666/anthropify.git
-cd anthropify
+git clone https://github.com/pejash666/turnmeld.git
+cd turnmeld
 go run ./examples/03-model-hot-switching
 ```
 
@@ -192,7 +192,7 @@ A common protocol shape does not make all model capabilities identical.
   `SetCacheControl` is not supported by Bedrock; use accepted per-block
   caching instead. See the
   [prompt-caching documentation](../../README.md#prompt-caching).
-- Anthropify is an embedded protocol library, not a hosted gateway with
+- Turnmeld is an embedded protocol library, not a hosted gateway with
   billing, multi-tenancy or rate limiting.
 
 ## More Examples
@@ -204,4 +204,4 @@ A common protocol shape does not make all model capabilities identical.
 - [Consume thinking blocks](../../examples/05-thinking-blocks).
 - [Inspect streaming events](../../examples/06-streaming-events).
 - [Register Anthropic-compatible backends](../../examples/07-anthropic-compat).
-- [API reference](https://pkg.go.dev/github.com/pejash666/anthropify).
+- [API reference](https://pkg.go.dev/github.com/pejash666/turnmeld).

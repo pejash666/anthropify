@@ -6,12 +6,12 @@ import (
 	"os"
 
 	"github.com/anthropics/anthropic-sdk-go"
-	ap "github.com/pejash666/anthropify"
+	tm "github.com/pejash666/turnmeld"
 )
 
 func main() {
-	client, err := ap.New(
-		ap.WithAnthropic(ap.AnthropicConfig{APIKey: os.Getenv("ANTHROPIC_API_KEY")}),
+	client, err := tm.New(
+		tm.WithAnthropic(tm.AnthropicConfig{APIKey: os.Getenv("ANTHROPIC_API_KEY")}),
 	)
 	if err != nil {
 		panic(err)

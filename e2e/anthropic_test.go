@@ -8,8 +8,8 @@ import (
 	"testing"
 
 	"github.com/anthropics/anthropic-sdk-go"
-	anthropify "github.com/pejash666/anthropify"
-	"github.com/pejash666/anthropify/e2e/helpers"
+	turnmeld "github.com/pejash666/turnmeld"
+	"github.com/pejash666/turnmeld/e2e/helpers"
 )
 
 // TestE2E_Anthropic_BasicStream exercises the passthrough adapter with
@@ -90,7 +90,7 @@ func TestE2E_Anthropic_StopReasonMapping(t *testing.T) {
 }
 
 // TestE2E_Anthropic_CacheControl_TopLevel proves the v0.2.0 Track C
-// canonical helper anthropify.SetCacheControl actually reaches
+// canonical helper turnmeld.SetCacheControl actually reaches
 // Anthropic and triggers prompt caching upstream.
 //
 // Strategy:
@@ -142,8 +142,8 @@ func TestE2E_Anthropic_CacheControl_TopLevel(t *testing.T) {
 					"Reply with just the word OK.")),
 			},
 		}
-		anthropify.SetCacheControl(&req, anthropify.CacheControl{
-			Type: anthropify.CacheControlEphemeral,
+		turnmeld.SetCacheControl(&req, turnmeld.CacheControl{
+			Type: turnmeld.CacheControlEphemeral,
 		})
 		return req
 	}

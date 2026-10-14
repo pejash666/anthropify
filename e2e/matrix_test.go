@@ -6,8 +6,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/pejash666/anthropify"
-	"github.com/pejash666/anthropify/e2e/helpers"
+	"github.com/pejash666/turnmeld"
+	"github.com/pejash666/turnmeld/e2e/helpers"
 )
 
 // TestE2E_Matrix_Consistency runs the same BasicTextPrompt against
@@ -19,7 +19,7 @@ import (
 func TestE2E_Matrix_Consistency(t *testing.T) {
 	type providerCase struct {
 		name  string
-		build func(*testing.T) (*anthropify.Client, string)
+		build func(*testing.T) (*turnmeld.Client, string)
 	}
 	cases := []providerCase{
 		{name: string(ProviderAnthropic), build: newAnthropicClient},

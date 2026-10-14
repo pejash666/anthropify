@@ -1,4 +1,4 @@
-package anthropify
+package turnmeld
 
 import (
 	"context"
@@ -9,10 +9,10 @@ import (
 
 	anthropicsdk "github.com/anthropics/anthropic-sdk-go"
 
-	"github.com/pejash666/anthropify/adapter"
-	chatadapter "github.com/pejash666/anthropify/adapter/chat_completions"
-	geminiadapter "github.com/pejash666/anthropify/adapter/gemini_native"
-	openairesponses "github.com/pejash666/anthropify/adapter/openai_responses"
+	"github.com/pejash666/turnmeld/adapter"
+	chatadapter "github.com/pejash666/turnmeld/adapter/chat_completions"
+	geminiadapter "github.com/pejash666/turnmeld/adapter/gemini_native"
+	openairesponses "github.com/pejash666/turnmeld/adapter/openai_responses"
 )
 
 // mockAdapter is a hand-rolled adapter.Adapter that returns
@@ -298,7 +298,7 @@ func TestErrUnsupported_Aliased(t *testing.T) {
 	}
 	for _, tc := range cases {
 		if !errors.Is(tc.err, ErrUnsupported) {
-			t.Errorf("%s: errors.Is(_, anthropify.ErrUnsupported) = false", tc.name)
+			t.Errorf("%s: errors.Is(_, turnmeld.ErrUnsupported) = false", tc.name)
 		}
 	}
 }

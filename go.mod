@@ -1,4 +1,4 @@
-module github.com/pejash666/anthropify
+module github.com/pejash666/turnmeld
 
 go 1.24.3
 
